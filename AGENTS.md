@@ -37,17 +37,51 @@ eShopMvc/
 The legacy app needs the VS Developer PowerShell (handled by `run-legacy.ps1`)
 and runs on mock data (`UseMockData=true` in its `Web.config`).
 
-## Target stack (proposed – confirm during assessment)
-| Legacy (expected) | Target |
+## Target stack
+Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment.md`.
+
+| Legacy | Target |
 |---|---|
-| ASP.NET MVC 5, Global.asax | ASP.NET Core MVC, `Program.cs` |
-| `Web.config` appSettings / connection strings | `appsettings.json` + options pattern |
-| Entity Framework 6 | EF Core (SQL Server) |
-| Autofac | Built-in `Microsoft.Extensions.DependencyInjection` |
-| log4net | `ILogger<T>` |
-| System.Web.Optimization bundling | Static files in `wwwroot` |
-| packages.config, non-SDK `.csproj` | SDK-style `.csproj`, PackageReference |
-| Windows Container (per the book) | Linux container |
+| .NET Framework 4.8, ASP.NET MVC 5.2.7 + Web API 2 (5.2.7), `Global.asax` | .NET 10, ASP.NET Core MVC + API controllers in one app, `Program.cs` |
+| `Web.config` appSettings (`UseMockData`, `UseCustomizationData`), XDT transforms | `appsettings.json` / `appsettings.{Env}.json` + options pattern |
+| EF6 6.2.0, `CreateDatabaseIfNotExists` + seed, HiLo IDs via SQL sequences | EF Core (SQL Server), startup seeding, HiLo (custom or `UseHiLo`) |
+| LocalDB, Integrated Security | SQL Server container, SQL auth |
+| Autofac 6.1 (+ Mvc5 / WebApi2 integration) | Built-in `Microsoft.Extensions.DependencyInjection` |
+| log4net 2.0.10 (rolling file) | `ILogger<T>` |
+| Application Insights 2.9.1 (no key in source) | Dropped; revisit at the Azure step |
+| InProc session (`Session_Start` → footer) | Session middleware |
+| `HandleErrorAttribute` | `UseExceptionHandler` + Error view |
+| System.Web.Optimization bundles | Static files in `wwwroot` |
+| `BinaryFormatter` (`/api/files`) | None in .NET 10; decision needed |
+| packages.config + PackageReference mixed, non-SDK `.csproj` | SDK-style `.csproj`, PackageReference |
+| IIS Express / Windows Container (per the book) | Kestrel / Linux container |
+
+## Known risks
+- `/api/files` uses BinaryFormatter, which .NET 10 doesn't support. Decide whether to drop it or change its format.
+- The committed `Web.config` has `UseMockData=false` (EF6 + LocalDB), which contradicts the Commands note above. Confirm the baseline mode.
+- Linux is case-sensitive: `log4Net.xml`, `Content/Site.css`, `Images/` are referenced with different casing.
+- JSON for `/api/brands` becomes camelCase by default (legacy is PascalCase).
+- Seed SQL scripts hard-code `USE [<db name>]` and backslash paths.
+- `PictureFileName` is bindable on POST and used unchecked in a file path (path traversal).
+- The footer needs `Session_Start` emulation and an explicit `en-US` culture.
+
+## Decisions
+- **R-1 `/api/files`:** contract change (.NET 10 cannot produce BinaryFormatter output).
+  - New: `GET /api/v1/files` returns the `BrandDTO` list as JSON (PascalCase, per R-7).
+    Plain attribute route; no versioning library unless approved.
+  - Old: `GET /api/files` returns `410 Gone` with a Problem Details body naming the
+    replacement and a `Link: </api/v1/files>; rel="successor-version"` header. No redirect.
+- **R-2 Baseline mode:** database mode (`UseMockData=false`, LocalDB), verified 2026-10-14.
+  Smoke tests and parity checks use this mode.
+- **R-7 JSON casing:** keep PascalCase for all API responses (`PropertyNamingPolicy = null`).
+- **R-8 `/api`:** `CatalogController2` returns 404 on the running legacy app (verified
+  2026-10-14). Dead code; do not port. ASP.NET Core would discover it, so leave it out.
+- **R-9 Path traversal:** fix it (validate `PictureFileName`). Deliberate deviation from parity.
+- **R-17 Static libraries:** latest release within the current major versions
+  (jQuery 3.x, Bootstrap 4.x, matching validation libraries). Major upgrades
+  (Bootstrap 5, jQuery 4) are a separate step after parity.
+- **R-21 HiLo:** use EF Core `UseHiLo("catalog_hilo")` instead of `CatalogItemHiLoGenerator`.
+  Brand/type seed sequences are handled in seeding code.
 
 ## Porting order
 1. Assessment: inventory incompatible APIs and packages; update the table above.
@@ -63,7 +97,7 @@ and runs on mock data (`UseMockData=true` in its `Web.config`).
 
 ## Progress
 - [x] Legacy app builds and runs (baseline commit)
-- [ ] Assessment
+- [x] Assessment
 - [ ] Smoke tests
 - [ ] New project created
 - [ ] Models / data / services
