@@ -45,7 +45,7 @@ Smoke tests (`tests/eShopMvc.SmokeTests`, xUnit v3) call a running app over HTTP
 `ESHOP_BASE_URL` defaults to http://localhost:5050; `ESHOP_TARGET` (`legacy`|`new`, default
 `legacy`) selects the expected result where a Decision changes behavior. Tests create and delete
 their own `smoke-*` items and never modify seeded data. `global.json` opts `dotnet test` into
-Microsoft.Testing.Platform (required by xUnit v3 on the .NET 10 SDK).
+Microsoft.Testing.Platform (required by xUnit v3 on the .NET 10 SDK). Any new test project must use a framework that supports it (e.g. xUnit v3).
 
 ## Target stack
 Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment.md`.
