@@ -12,6 +12,7 @@ eShopMvc/
   legacy/eShopLegacyMVCSolution/   original app – READ-ONLY reference
   src/                             new ASP.NET Core app (eShopMvc.Web)
   tests/                           smoke tests, runnable against either app
+  global.json                      dotnet test runner = Microsoft.Testing.Platform
   run-legacy.ps1                   builds and runs the legacy app
   AGENTS.md                        this file
   CLAUDE.md                        imports this file for Claude Code
@@ -25,6 +26,8 @@ eShopMvc/
 - Do not add NuGet packages, change routes, or rename public types without asking.
 - Preserve behavior first; improve design only when asked.
 - If something in the legacy code is unclear, say so instead of guessing.
+- New logic in `src/` with real decisions or edge cases (validation, paging, mappings)
+  gets unit tests; thin CRUD pass-through code doesn't need them.
 
 ## Commands
 | Task | Command (PowerShell, from repo root) |
@@ -32,10 +35,17 @@ eShopMvc/
 | Build + run legacy app | `.\run-legacy.ps1` → http://localhost:5050 (press `Q` to stop) |
 | Build new app | `dotnet build src` |
 | Run new app | `dotnet run --project src/eShopMvc.Web` → http://localhost:5060 |
-| Run tests | `dotnet test tests` |
+| Smoke tests vs legacy (app must be running) | `dotnet test tests` |
+| Smoke tests vs new app | `$env:ESHOP_BASE_URL='http://localhost:5060'; $env:ESHOP_TARGET='new'; dotnet test tests` |
 
 The legacy app needs the VS Developer PowerShell (handled by `run-legacy.ps1`)
-and runs on mock data (`UseMockData=true` in its `Web.config`).
+and runs in database mode (`UseMockData=false`, LocalDB; see Decisions R-2).
+
+Smoke tests (`tests/eShopMvc.SmokeTests`, xUnit v3) call a running app over HTTP.
+`ESHOP_BASE_URL` defaults to http://localhost:5050; `ESHOP_TARGET` (`legacy`|`new`, default
+`legacy`) selects the expected result where a Decision changes behavior. Tests create and delete
+their own `smoke-*` items and never modify seeded data. `global.json` opts `dotnet test` into
+Microsoft.Testing.Platform (required by xUnit v3 on the .NET 10 SDK).
 
 ## Target stack
 Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment.md`.
@@ -98,7 +108,7 @@ Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment
 ## Progress
 - [x] Legacy app builds and runs (baseline commit)
 - [x] Assessment
-- [ ] Smoke tests
+- [x] Smoke tests
 - [ ] New project created
 - [ ] Models / data / services
 - [ ] Controllers
