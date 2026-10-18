@@ -27,6 +27,7 @@ public class CatalogItem
     public decimal Price { get; set; }
 
     [Display(Name = "Picture name")]
+    [PictureFileName] // Decision R-9 (not in legacy)
     public string? PictureFileName { get; set; }
 
     public string? PictureUri { get; set; }

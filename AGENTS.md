@@ -107,9 +107,37 @@ Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment
 - **R-2 Baseline mode:** database mode (`UseMockData=false`, LocalDB), verified 2026-10-14.
   Smoke tests and parity checks use this mode.
 - **R-7 JSON casing:** keep PascalCase for all API responses (`PropertyNamingPolicy = null`).
+  - **XML** (step 6): not ported. Legacy Web API also negotiated XML (DataContract, with the CLR
+    namespace in it, so exact parity is impossible anyway); no consumer exists. `Accept: application/xml`
+    gets JSON (ASP.NET Core default); switching to 406 is one option (`ReturnHttpNotAcceptable`).
 - **R-8 `/api`:** `CatalogController2` returns 404 on the running legacy app (verified
   2026-10-14). Dead code; do not port. ASP.NET Core would discover it, so leave it out.
 - **R-9 Path traversal:** fix it (validate `PictureFileName`). Deliberate deviation from parity.
+  Details (step 6, `Services/PictureFiles.cs`, unit-tested):
+  - **Validation (allowlist):** `[PictureFileName]` on `CatalogItem.PictureFileName` accepts only a bare
+    file name of ASCII letters, digits, `-`, `_` and `.`, other than `.` and `..`; Create and Edit show
+    a form validation error otherwise. Null/empty passes this rule (unchanged legacy behavior).
+    All legacy picture names (`1.png`–`12.png`, `dummy.png`) pass.
+  - **Path check (defense in depth):** `PicController` resolves the name under `ContentRootPath/Pics`
+    and returns **404** if `Path.GetRelativePath(folder, path)` is exactly `..`, starts with `..` plus a
+    directory separator, or is rooted. Names that merely start with two dots (`..backup.png`) are inside.
+    On Linux `\` is not a separator, so `..\x.png` is a file name there, not a parent reference.
+  - Pictures live in `src/eShopMvc.Web/Pics` (copied from legacy), outside `wwwroot`, served only via
+    `/items/{id}/pic`; the csproj publishes them. MIME mapping unchanged (case-sensitive). A missing
+    file still throws (500), as in legacy.
+- **R-12 Culture** (step 6): `UseRequestLocalization` with `en-US` (no user overrides) as the only
+  culture and no request culture providers, so `Accept-Language` can't change price binding or
+  formatting (legacy: fixed `<globalization culture="en-US" uiCulture="en-US" />`). Containers need
+  ICU (don't enable `InvariantGlobalization`; step 10).
+- **R-15 Delete POST of a missing id:** 404 (legacy: 500 in database mode, redirect in mock mode),
+  consistent with GET `/Catalog/Delete/{id}`.
+- **R-16 Paging:** `Index` returns 400 for `pageSize < 1`, `pageIndex < 0`, or `pageSize × pageIndex`
+  overflowing `int` (legacy: 500 in all three). The hidden "Previous" link on page 0 still points to
+  `pageIndex=-1`, as legacy.
+- **R-23 Errors:** Development uses the developer exception page (legacy local users saw the YSOD).
+  Elsewhere `UseExceptionHandler("/Error")` → `ErrorController` (any HTTP method), a generic page
+  without details; the middleware logs the exception (legacy didn't). Wired in step 6 with the
+  template's `Error.cshtml`; restyled from legacy's in step 7. 400/404 keep empty bodies.
 - **R-14 Mock quirks:** fix both; nothing observable changes except brand/type now appearing.
   - `CatalogServiceMock` is a singleton shared by all requests: every list access takes a lock.
   - Every item it returns (paging and `FindCatalogItem`) has `CatalogBrand`/`CatalogType` set,
@@ -169,6 +197,16 @@ Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment
 - **Seeding hooks:** `CatalogDBInitializer` is registered with both `UseSeeding` and
   `UseAsyncSeeding` (shared plan), so `Migrate()` and `MigrateAsync()` seed identically; seeding
   runs only when `CatalogBrand` is empty. Both paths are covered by integration tests.
+- **D13 Index views pulled into step 6:** `Views/Catalog/Index.cshtml` and `CatalogTable.cshtml` were
+  ported with the controllers (rendered in the template layout until step 7), because the smoke
+  suite's `SuiteFixture` reads `/Catalog/Index` before any test and fails the whole run without it.
+- **D14 In-process tests:** `Microsoft.AspNetCore.Mvc.Testing` 10.0.13 in
+  `eShopMvc.Web.IntegrationTests` (`Web/`), `WebApplicationFactory<Program>` in mock mode (a test pins
+  that the app database is never touched); `Program.cs` ends with `public partial class Program;`.
+- **Porting note, `Html.ActionLink`:** MVC 5's `ActionLink(text, action, null, new { @class = … })`
+  compiles in ASP.NET Core but binds `null` to `controllerName` and the attributes to route values
+  (`?class=…`). Use named arguments: `ActionLink(text, action, routeValues: null, htmlAttributes: …)`.
+  Done in Index; still to do in Create, Delete, Details and Edit (step 7).
 
 ## Porting order
 1. Assessment: inventory incompatible APIs and packages; update the table above.
@@ -189,7 +227,8 @@ Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment
 - [x] New project created (template defaults; smoke tests vs new app: 0/44, expected)
 - [x] Models and mock data source (`Catalog:UseMockData=true`; unit tests 16/16)
 - [x] Data layer (EF Core) and services (unit 39/39, integration 11/11; schema matches legacy except D9 names)
-- [ ] Controllers
+- [x] Controllers (+ Index/CatalogTable views, D13; unit 101/101, integration 37/37;
+  smoke vs new 28 passed / 12 failed / 4 skipped, all 12 need step-7 views; vs legacy 40/0/4)
 - [ ] Views / static content
 - [ ] Config / logging
 - [ ] Parity verified
