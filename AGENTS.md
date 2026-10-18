@@ -12,8 +12,10 @@ eShopMvc/
   legacy/eShopLegacyMVCSolution/   original app – READ-ONLY reference
   src/eShopMvc.Web/                new ASP.NET Core MVC app (.NET 10), http://localhost:5070
   tests/eShopMvc.SmokeTests/       HTTP smoke tests, runnable against either app
-  tests/eShopMvc.Web.UnitTests/    unit tests for src/eShopMvc.Web (no running app needed)
+  tests/eShopMvc.Web.UnitTests/    unit tests for src/eShopMvc.Web (no running app, no database)
+  tests/eShopMvc.Web.IntegrationTests/  database tests (own LocalDB test database; see D11)
   eShopMvc.slnx                    the only solution: web app + test projects
+  dotnet-tools.json                local tools (dotnet-ef 10.0.13); `dotnet tool restore`
   global.json                      dotnet test runner = Microsoft.Testing.Platform
   run-legacy.ps1                   builds and runs the legacy app
   AGENTS.md                        this file
@@ -36,9 +38,13 @@ eShopMvc/
 |---|---|
 | Build + run legacy app | `.\run-legacy.ps1` → http://localhost:5050 (press `Q` to stop) |
 | Build new app + tests | `dotnet build` (root `eShopMvc.slnx`) |
-| Run new app | `dotnet run --project src/eShopMvc.Web` → http://localhost:5070 |
+| Run new app (creates/migrates and seeds `eShopMvc.CatalogDb`) | `dotnet run --project src/eShopMvc.Web` → http://localhost:5070 |
 | Run new app with mock data | `dotnet run --project src/eShopMvc.Web -- --Catalog:UseMockData=true` |
 | Unit tests | `dotnet test --project tests/eShopMvc.Web.UnitTests` |
+| Integration tests (LocalDB) | `dotnet test --project tests/eShopMvc.Web.IntegrationTests` |
+| Restore local tools (once) | `dotnet tool restore` |
+| Add an EF Core migration | `dotnet ef migrations add <Name> --project src/eShopMvc.Web` |
+| Drop the new app's database | `dotnet ef database drop --project src/eShopMvc.Web` |
 | Smoke tests vs legacy (app must be running) | `dotnet test --project tests/eShopMvc.SmokeTests` |
 | Smoke tests vs new app (app must be running) | `$env:ESHOP_BASE_URL='http://localhost:5070'; $env:ESHOP_TARGET='new'; dotnet test --project tests/eShopMvc.SmokeTests` |
 
@@ -46,8 +52,12 @@ The legacy app needs the VS Developer PowerShell (handled by `run-legacy.ps1`)
 and runs in database mode (`UseMockData=false`, LocalDB; see Decisions R-2).
 
 The new app reads `Catalog:UseMockData` (appsettings.json, default `false` per R-2; override with
-`--Catalog:UseMockData=true` or `$env:Catalog__UseMockData='true'`). Until step 5, `false` makes
-startup fail on purpose with a message saying database mode isn't implemented yet.
+`--Catalog:UseMockData=true` or `$env:Catalog__UseMockData='true'`). With `false` it needs
+`ConnectionStrings:CatalogDBContext` (Development: LocalDB `eShopMvc.CatalogDb` in
+appsettings.Development.json; elsewhere `$env:ConnectionStrings__CatalogDBContext`, see D5) and
+runs `MigrateAsync()` plus seeding at startup. A missing connection string fails startup.
+Integration tests use `$env:ESHOP_TEST_DB` (a full connection string), default LocalDB
+`eShopMvc.CatalogDb.Tests`; they recreate and drop it, never touching the app's database.
 
 Smoke tests (`tests/eShopMvc.SmokeTests`, xUnit v3) call a running app over HTTP.
 `ESHOP_BASE_URL` defaults to http://localhost:5050; `ESHOP_TARGET` (`legacy`|`new`, default
@@ -66,7 +76,7 @@ Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment
 |---|---|
 | .NET Framework 4.8, ASP.NET MVC 5.2.7 + Web API 2 (5.2.7), `Global.asax` | .NET 10, ASP.NET Core MVC + API controllers in one app, `Program.cs` |
 | `Web.config` appSettings (`UseMockData`, `UseCustomizationData`), XDT transforms | `appsettings.json` / `appsettings.{Env}.json` + options pattern |
-| EF6 6.2.0, `CreateDatabaseIfNotExists` + seed, HiLo IDs via SQL sequences | EF Core (SQL Server), startup seeding, HiLo (custom or `UseHiLo`) |
+| EF6 6.2.0, `CreateDatabaseIfNotExists` + seed, HiLo IDs via SQL sequences | EF Core (SQL Server), migrations + startup seeding; item IDs via `UseHiLo("catalog_hilo")`, brand/type IDs IDENTITY (R-21, D6, D8) |
 | LocalDB, Integrated Security | SQL Server container, SQL auth |
 | Autofac 6.1 (+ Mvc5 / WebApi2 integration) | Built-in `Microsoft.Extensions.DependencyInjection` |
 | log4net 2.0.10 (rolling file) | `ILogger<T>` |
@@ -83,7 +93,8 @@ Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment
 - The committed `Web.config` has `UseMockData=false` (EF6 + LocalDB), which contradicts the Commands note above. Confirm the baseline mode.
 - Linux is case-sensitive: `log4Net.xml`, `Content/Site.css`, `Images/` are referenced with different casing.
 - JSON for `/api/brands` becomes camelCase by default (legacy is PascalCase).
-- Seed SQL scripts hard-code `USE [<db name>]` and backslash paths.
+- ~~Seed SQL scripts hard-code `USE [<db name>]` and backslash paths.~~ Resolved by D7: EF Core
+  creates the sequences from the model; the scripts aren't ported.
 - `PictureFileName` is bindable on POST and used unchecked in a file path (path traversal).
 - The footer needs `Session_Start` emulation and an explicit `en-US` culture.
 
@@ -107,8 +118,9 @@ Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment
 - **R-17 Static libraries:** latest release within the current major versions
   (jQuery 3.x, Bootstrap 4.x, matching validation libraries). Major upgrades
   (Bootstrap 5, jQuery 4) are a separate step after parity.
-- **R-21 HiLo:** use EF Core `UseHiLo("catalog_hilo")` instead of `CatalogItemHiLoGenerator`.
-  Brand/type seed sequences are handled in seeding code.
+- **R-21 HiLo** (amended in step 5): `catalog_hilo` via EF Core `UseHiLo("catalog_hilo")` instead of
+  `CatalogItemHiLoGenerator`. Brand/type IDs are IDENTITY (as in legacy); their sequences are
+  created but unused (D8).
 - **D2 `ICatalogService`:** no longer `IDisposable`. Its only caller was `CatalogController.Dispose`,
   which isn't ported (R-15); the container owns service lifetimes, and the EF service must not
   dispose a `DbContext` it doesn't own.
@@ -120,9 +132,43 @@ Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment
     `CatalogBrandId` and `CatalogTypeId` (the required brand/type relationships) as required
     explicitly, plus `CatalogBrand.Brand` and `CatalogType.Type` (required, max 100), so the schema
     matches legacy (`docs/assessment.md` 4.2). Don't rely on nullability conventions.
+    Done in `CatalogDBContext`; pinned by `CatalogDBContextModelTests`.
 - **D4 `BrandDTO`:** top-level `eShopMvc.Web.Models.BrandDTO` (legacy: nested in `FilesController`),
   without `[Serializable]` (BinaryFormatter only). Same name and properties, so R-1's JSON is
   `[{"Id":…,"Brand":…}]`.
+- **D5 Database and connection string:** LocalDB database `eShopMvc.CatalogDb`, separate from the
+  legacy `Microsoft.eShopOnContainers.Services.CatalogDb` (R-22). Connection string name
+  `CatalogDBContext` (as legacy), value only in `appsettings.Development.json`
+  (`Server=(localdb)\MSSQLLocalDB;Database=eShopMvc.CatalogDb;Integrated Security=True`, no MARS).
+  Other environments must supply `ConnectionStrings__CatalogDBContext` (container/Azure, SQL auth,
+  R-3); no password is ever committed.
+- **D6 Schema creation:** EF Core migrations (`src/eShopMvc.Web/Migrations`), applied with
+  `MigrateAsync()` at startup (legacy: `CreateDatabaseIfNotExists` on first request). For Azure,
+  switch to applying them from the pipeline (idempotent script or migration bundle).
+- **D7 Sequences:** created by EF Core from the model (`HasSequence`, `UseHiLo`): bigint, START 1,
+  INCREMENT 10. The legacy `.sql` scripts aren't ported, which resolves R-4 (`USE [db]`) and R-5
+  (backslash paths).
+- **D8 Brand/type IDs:** IDENTITY, as EF6 created them by convention (the legacy seeding fetched
+  sequence values but EF6 discarded them). Seeding inserts the `PreconfiguredData` IDs under
+  `IDENTITY_INSERT`, so the items' foreign keys always match (resolves R-19).
+- **D9 Constraint/index names:** EF Core defaults (`PK_Catalog`, `FK_Catalog_CatalogBrand_CatalogBrandId`,
+  `IX_Catalog_CatalogBrandId`, …), not EF6's (`PK_dbo.Catalog`, `FK_dbo.Catalog_dbo.CatalogBrand_CatalogBrandId`,
+  `IX_CatalogBrandId`, …). An expected difference in schema comparisons.
+- **D10 `UseCustomizationData`** (CSV/ZIP seeding, R-20): not ported, no option added. Revisit after
+  parity if needed (it rewrites `Pics/`, which a read-only container can't do; see also R-25).
+- **D11 Database tests:** `tests/eShopMvc.Web.IntegrationTests` against a dedicated database
+  (`ESHOP_TEST_DB`, default LocalDB `eShopMvc.CatalogDb.Tests`), recreated with `MigrateAsync()` per
+  run and dropped afterwards; each service test runs in a rolled-back transaction. Not the EF Core
+  in-memory provider or SQLite (no sequences/HiLo, different SQL semantics).
+- **D12 `System.Security.Cryptography.Pkcs` 10.0.13:** direct reference in `eShopMvc.Web` to override
+  the transitive 9.0.11 from `Microsoft.Data.SqlClient` 6.1.7 (via EF Core SqlServer 10.0.13), which
+  has advisories GHSA-846f-f764-76mx (high, .NET denial of service) and GHSA-2fmv-rv2c-59x7 (moderate).
+  10.0.13 is patched. **Remove** once the SqlClient version EF Core uses depends on a patched Pkcs
+  (check with `dotnet nuget why src/eShopMvc.Web/eShopMvc.Web.csproj System.Security.Cryptography.Pkcs`
+  after removing it, then `dotnet list src/eShopMvc.Web package --vulnerable --include-transitive`).
+- **Seeding hooks:** `CatalogDBInitializer` is registered with both `UseSeeding` and
+  `UseAsyncSeeding` (shared plan), so `Migrate()` and `MigrateAsync()` seed identically; seeding
+  runs only when `CatalogBrand` is empty. Both paths are covered by integration tests.
 
 ## Porting order
 1. Assessment: inventory incompatible APIs and packages; update the table above.
@@ -142,7 +188,7 @@ Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment
 - [x] Smoke tests
 - [x] New project created (template defaults; smoke tests vs new app: 0/44, expected)
 - [x] Models and mock data source (`Catalog:UseMockData=true`; unit tests 16/16)
-- [ ] Data layer (EF Core) and services
+- [x] Data layer (EF Core) and services (unit 39/39, integration 11/11; schema matches legacy except D9 names)
 - [ ] Controllers
 - [ ] Views / static content
 - [ ] Config / logging

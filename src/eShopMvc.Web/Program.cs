@@ -8,6 +8,8 @@ builder.Services.AddCatalogServices(builder.Configuration);
 
 var app = builder.Build();
 
+await app.InitializeCatalogDatabaseAsync();
+
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
