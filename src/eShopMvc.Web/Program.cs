@@ -1,14 +1,20 @@
 using System.Globalization;
+using eShopMvc.Web.Infrastructure;
 using eShopMvc.Web.Services;
 using Microsoft.AspNetCore.Localization;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddControllersWithViews()
+builder.Services.AddControllersWithViews(options => options.Filters.Add<SessionStartFilter>())
     // Decision R-7: PascalCase JSON, as Web API 2 (Newtonsoft) produced. No XML formatter.
     .AddJsonOptions(options => options.JsonSerializerOptions.PropertyNamingPolicy = null);
 builder.Services.AddCatalogServices(builder.Configuration);
+
+// Decision R-11: session for the footer (legacy InProc session + Session_Start, 20-minute idle timeout).
+builder.Services.AddDistributedMemoryCache();
+builder.Services.AddSession();
+builder.Services.AddSingleton(TimeProvider.System);
 
 var app = builder.Build();
 
@@ -38,6 +44,8 @@ app.UseRequestLocalization(new RequestLocalizationOptions
 });
 
 app.UseRouting();
+
+app.UseSession();
 
 app.UseAuthorization();
 

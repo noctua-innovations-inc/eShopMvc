@@ -15,7 +15,7 @@ eShopMvc/
   tests/eShopMvc.Web.UnitTests/    unit tests for src/eShopMvc.Web (no running app, no database)
   tests/eShopMvc.Web.IntegrationTests/  database tests (own LocalDB test database; see D11)
   eShopMvc.slnx                    the only solution: web app + test projects
-  dotnet-tools.json                local tools (dotnet-ef 10.0.13); `dotnet tool restore`
+  dotnet-tools.json                local tools (dotnet-ef 10.0.13, libman 3.0.114); `dotnet tool restore`
   global.json                      dotnet test runner = Microsoft.Testing.Platform
   run-legacy.ps1                   builds and runs the legacy app
   AGENTS.md                        this file
@@ -45,6 +45,8 @@ eShopMvc/
 | Restore local tools (once) | `dotnet tool restore` |
 | Add an EF Core migration | `dotnet ef migrations add <Name> --project src/eShopMvc.Web` |
 | Drop the new app's database | `dotnet ef database drop --project src/eShopMvc.Web` |
+| Update a client library (R-17) | `cd src/eShopMvc.Web; dotnet libman update <name> --to <version>` (e.g. `jquery --to 3.7.2`), then commit `libman.json` and `wwwroot/lib` |
+| Re-download client libraries | `cd src/eShopMvc.Web; dotnet libman restore` (only needed if `wwwroot/lib` was deleted) |
 | Smoke tests vs legacy (app must be running) | `dotnet test --project tests/eShopMvc.SmokeTests` |
 | Smoke tests vs new app (app must be running) | `$env:ESHOP_BASE_URL='http://localhost:5070'; $env:ESHOP_TARGET='new'; dotnet test --project tests/eShopMvc.SmokeTests` |
 
@@ -138,6 +140,9 @@ Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment
   Elsewhere `UseExceptionHandler("/Error")` → `ErrorController` (any HTTP method), a generic page
   without details; the middleware logs the exception (legacy didn't). Wired in step 6 with the
   template's `Error.cshtml`; restyled from legacy's in step 7. 400/404 keep empty bodies.
+  - Step 7: `Views/Shared/Error.cshtml` shows legacy's text ("Error." / "An error occurred while
+    processing your request.") inside the layout (legacy's full HTML document rendered nested in it),
+    plus the request ID for matching the logs. No exception details (verified in Production mode).
 - **R-14 Mock quirks:** fix both; nothing observable changes except brand/type now appearing.
   - `CatalogServiceMock` is a singleton shared by all requests: every list access takes a lock.
   - Every item it returns (paging and `FindCatalogItem`) has `CatalogBrand`/`CatalogType` set,
@@ -146,6 +151,29 @@ Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment
 - **R-17 Static libraries:** latest release within the current major versions
   (jQuery 3.x, Bootstrap 4.x, matching validation libraries). Major upgrades
   (Bootstrap 5, jQuery 4) are a separate step after parity.
+  - Step 7: jQuery 3.7.1, Bootstrap 4.6.2 (`bootstrap.min.js`, no Popper, as legacy), jQuery Validation
+    1.22.1, jquery-validation-unobtrusive 4.0.0 (legacy served 3.3.1, 4.3.1, 1.17.0). Managed with
+    LibMan (`src/eShopMvc.Web/libman.json`, jsDelivr provider = npm versions, only the files used);
+    the LibMan CLI is a local tool. The restored files in `wwwroot/lib` are **committed**, so builds and
+    containers need neither network nor LibMan. Minified files are served (legacy debug: unminified).
+- **R-6 Static paths:** `wwwroot/css/{custom,base,site}.css` (legacy `Content/`, `Site.css` lowercased),
+  `wwwroot/fonts/`, `wwwroot/images/` (legacy `Images/`), `wwwroot/favicon.ico`. The CSS's
+  `../images/…` and `../fonts/…` references match the file names exactly (checked case-sensitively).
+- **R-11 Session/footer:** `AddSession` (in-memory, 20-minute idle timeout as legacy InProc) and the
+  global `SessionStartFilter` (in place of `Session_Start`): on a session's first request to a
+  `Controller`-based (view) controller it stores `MachineName` and the start time as
+  `M/d/yyyy h:mm:ss tt` (en-US), which matches legacy's output exactly (.NET 10's ICU `G` pattern may
+  use U+202F before AM/PM). API controllers start no session (legacy Web API had none). Step 10:
+  machine name = container hostname, time zone usually UTC, in-memory session needs sticky sessions
+  or a shared store when scaled out.
+- **R-18 Modernizr and Respond:** dropped (old-IE polyfills; nothing in the CSS or views uses them).
+- **R-24 UI quirks:** Edit labels showing `CatalogBrandId`/`CatalogTypeId` and the pager text
+  (page size, not item count) are **preserved**. The missing picture on an invalid Edit re-render is
+  **fixed** (`CatalogController` sets `PictureUri` before re-rendering).
+- **Views use `Html.*` helpers** as in legacy (closest HTML); tag helpers only for `<partial>` and `~/`
+  resolution. Converting to tag helpers is a possible clean-up after parity.
+- **Create view, R-9:** legacy's Create form has no `PictureFileName` field and its validation message
+  was commented out, so a rejected path wasn't shown. The message line is enabled (input still absent).
 - **R-21 HiLo** (amended in step 5): `catalog_hilo` via EF Core `UseHiLo("catalog_hilo")` instead of
   `CatalogItemHiLoGenerator`. Brand/type IDs are IDENTITY (as in legacy); their sequences are
   created but unused (D8).
@@ -206,7 +234,7 @@ Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment
 - **Porting note, `Html.ActionLink`:** MVC 5's `ActionLink(text, action, null, new { @class = … })`
   compiles in ASP.NET Core but binds `null` to `controllerName` and the attributes to route values
   (`?class=…`). Use named arguments: `ActionLink(text, action, routeValues: null, htmlAttributes: …)`.
-  Done in Index; still to do in Create, Delete, Details and Edit (step 7).
+  Applied in all five views (Index in step 6; Create, Delete, Details, Edit in step 7).
 
 ## Porting order
 1. Assessment: inventory incompatible APIs and packages; update the table above.
@@ -229,7 +257,7 @@ Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment
 - [x] Data layer (EF Core) and services (unit 39/39, integration 11/11; schema matches legacy except D9 names)
 - [x] Controllers (+ Index/CatalogTable views, D13; unit 101/101, integration 37/37;
   smoke vs new 28 passed / 12 failed / 4 skipped, all 12 need step-7 views; vs legacy 40/0/4)
-- [ ] Views / static content
+- [x] Views / static content (unit 107/107, integration 46/46; smoke vs new 40/0/4, vs legacy 40/0/4)
 - [ ] Config / logging
 - [ ] Parity verified
 - [ ] Containerized

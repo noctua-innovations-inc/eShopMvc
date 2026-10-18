@@ -106,6 +106,7 @@ public class CatalogController : Controller
             service.UpdateCatalogItem(catalogItem);
             return RedirectToAction("Index");
         }
+        AddUriPlaceHolder(catalogItem); // Decision R-24 (legacy re-rendered without the picture)
         ViewBag.CatalogBrandId = new SelectList(service.GetCatalogBrands(), "Id", "Brand", catalogItem.CatalogBrandId);
         ViewBag.CatalogTypeId = new SelectList(service.GetCatalogTypes(), "Id", "Type", catalogItem.CatalogTypeId);
         return View(catalogItem);
