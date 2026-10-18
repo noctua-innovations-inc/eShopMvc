@@ -10,8 +10,9 @@ pages, routes and behavior. Later: Linux container and Azure deployment.
 ```
 eShopMvc/
   legacy/eShopLegacyMVCSolution/   original app – READ-ONLY reference
-  src/                             new ASP.NET Core app (eShopMvc.Web)
-  tests/                           smoke tests, runnable against either app
+  src/eShopMvc.Web/                new ASP.NET Core MVC app (.NET 10), http://localhost:5060
+  tests/eShopMvc.SmokeTests/       HTTP smoke tests, runnable against either app
+  eShopMvc.slnx                    the only solution: web app + test projects
   global.json                      dotnet test runner = Microsoft.Testing.Platform
   run-legacy.ps1                   builds and runs the legacy app
   AGENTS.md                        this file
@@ -33,10 +34,10 @@ eShopMvc/
 | Task | Command (PowerShell, from repo root) |
 |---|---|
 | Build + run legacy app | `.\run-legacy.ps1` → http://localhost:5050 (press `Q` to stop) |
-| Build new app | `dotnet build src` |
+| Build new app + tests | `dotnet build` (root `eShopMvc.slnx`) |
 | Run new app | `dotnet run --project src/eShopMvc.Web` → http://localhost:5060 |
-| Smoke tests vs legacy (app must be running) | `dotnet test tests` |
-| Smoke tests vs new app | `$env:ESHOP_BASE_URL='http://localhost:5060'; $env:ESHOP_TARGET='new'; dotnet test tests` |
+| Smoke tests vs legacy (app must be running) | `dotnet test --project tests/eShopMvc.SmokeTests` |
+| Smoke tests vs new app (app must be running) | `$env:ESHOP_BASE_URL='http://localhost:5060'; $env:ESHOP_TARGET='new'; dotnet test --project tests/eShopMvc.SmokeTests` |
 
 The legacy app needs the VS Developer PowerShell (handled by `run-legacy.ps1`)
 and runs in database mode (`UseMockData=false`, LocalDB; see Decisions R-2).
@@ -46,6 +47,10 @@ Smoke tests (`tests/eShopMvc.SmokeTests`, xUnit v3) call a running app over HTTP
 `legacy`) selects the expected result where a Decision changes behavior. Tests create and delete
 their own `smoke-*` items and never modify seeded data. `global.json` opts `dotnet test` into
 Microsoft.Testing.Platform (required by xUnit v3 on the .NET 10 SDK). Any new test project must use a framework that supports it (e.g. xUnit v3).
+In MTP mode `dotnet test` takes no path argument; pass `--project <dir or .csproj>` (as above).
+Add every new project to `eShopMvc.slnx` (`dotnet sln eShopMvc.slnx add <path>`); there is no
+separate tests solution. Plain `dotnet test` at the root would also run the smoke tests, which
+need a running app.
 
 ## Target stack
 Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment.md`.
@@ -109,7 +114,7 @@ Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment
 - [x] Legacy app builds and runs (baseline commit)
 - [x] Assessment
 - [x] Smoke tests
-- [ ] New project created
+- [x] New project created (template defaults; smoke tests vs new app: 0/44, expected)
 - [ ] Models / data / services
 - [ ] Controllers
 - [ ] Views / static content
