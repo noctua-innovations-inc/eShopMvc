@@ -10,8 +10,9 @@ pages, routes and behavior. Later: Linux container and Azure deployment.
 ```
 eShopMvc/
   legacy/eShopLegacyMVCSolution/   original app – READ-ONLY reference
-  src/eShopMvc.Web/                new ASP.NET Core MVC app (.NET 10), http://localhost:5060
+  src/eShopMvc.Web/                new ASP.NET Core MVC app (.NET 10), http://localhost:5070
   tests/eShopMvc.SmokeTests/       HTTP smoke tests, runnable against either app
+  tests/eShopMvc.Web.UnitTests/    unit tests for src/eShopMvc.Web (no running app needed)
   eShopMvc.slnx                    the only solution: web app + test projects
   global.json                      dotnet test runner = Microsoft.Testing.Platform
   run-legacy.ps1                   builds and runs the legacy app
@@ -35,12 +36,18 @@ eShopMvc/
 |---|---|
 | Build + run legacy app | `.\run-legacy.ps1` → http://localhost:5050 (press `Q` to stop) |
 | Build new app + tests | `dotnet build` (root `eShopMvc.slnx`) |
-| Run new app | `dotnet run --project src/eShopMvc.Web` → http://localhost:5060 |
+| Run new app | `dotnet run --project src/eShopMvc.Web` → http://localhost:5070 |
+| Run new app with mock data | `dotnet run --project src/eShopMvc.Web -- --Catalog:UseMockData=true` |
+| Unit tests | `dotnet test --project tests/eShopMvc.Web.UnitTests` |
 | Smoke tests vs legacy (app must be running) | `dotnet test --project tests/eShopMvc.SmokeTests` |
-| Smoke tests vs new app (app must be running) | `$env:ESHOP_BASE_URL='http://localhost:5060'; $env:ESHOP_TARGET='new'; dotnet test --project tests/eShopMvc.SmokeTests` |
+| Smoke tests vs new app (app must be running) | `$env:ESHOP_BASE_URL='http://localhost:5070'; $env:ESHOP_TARGET='new'; dotnet test --project tests/eShopMvc.SmokeTests` |
 
 The legacy app needs the VS Developer PowerShell (handled by `run-legacy.ps1`)
 and runs in database mode (`UseMockData=false`, LocalDB; see Decisions R-2).
+
+The new app reads `Catalog:UseMockData` (appsettings.json, default `false` per R-2; override with
+`--Catalog:UseMockData=true` or `$env:Catalog__UseMockData='true'`). Until step 5, `false` makes
+startup fail on purpose with a message saying database mode isn't implemented yet.
 
 Smoke tests (`tests/eShopMvc.SmokeTests`, xUnit v3) call a running app over HTTP.
 `ESHOP_BASE_URL` defaults to http://localhost:5050; `ESHOP_TARGET` (`legacy`|`new`, default
@@ -92,11 +99,30 @@ Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment
 - **R-8 `/api`:** `CatalogController2` returns 404 on the running legacy app (verified
   2026-10-14). Dead code; do not port. ASP.NET Core would discover it, so leave it out.
 - **R-9 Path traversal:** fix it (validate `PictureFileName`). Deliberate deviation from parity.
+- **R-14 Mock quirks:** fix both; nothing observable changes except brand/type now appearing.
+  - `CatalogServiceMock` is a singleton shared by all requests: every list access takes a lock.
+  - Every item it returns (paging and `FindCatalogItem`) has `CatalogBrand`/`CatalogType` set,
+    matching the EF service's `Include()` (R-2 baseline). Paging no longer rewrites every stored item.
+  - `FindCatalogItem` still returns the stored instance; `RemoveCatalogItem` matches by reference (legacy).
 - **R-17 Static libraries:** latest release within the current major versions
   (jQuery 3.x, Bootstrap 4.x, matching validation libraries). Major upgrades
   (Bootstrap 5, jQuery 4) are a separate step after parity.
 - **R-21 HiLo:** use EF Core `UseHiLo("catalog_hilo")` instead of `CatalogItemHiLoGenerator`.
   Brand/type seed sequences are handled in seeding code.
+- **D2 `ICatalogService`:** no longer `IDisposable`. Its only caller was `CatalogController.Dispose`,
+  which isn't ported (R-15); the container owns service lifetimes, and the EF service must not
+  dispose a `DbContext` it doesn't own.
+- **D3 Nullability:** optional reference properties are nullable in C# (`CatalogItem.Name`,
+  `Description`, `PictureFileName`, `PictureUri`, `CatalogBrand`, `CatalogType`; `CatalogBrand.Brand`;
+  `CatalogType.Type`). With `<Nullable>` enabled, MVC treats non-nullable reference properties as
+  implicitly `[Required]`, which would change legacy validation. `Name` keeps its explicit `[Required]`.
+  - **Step 5:** because of this, the EF Core configuration must mark `Name`, `PictureFileName`,
+    `CatalogBrandId` and `CatalogTypeId` (the required brand/type relationships) as required
+    explicitly, plus `CatalogBrand.Brand` and `CatalogType.Type` (required, max 100), so the schema
+    matches legacy (`docs/assessment.md` 4.2). Don't rely on nullability conventions.
+- **D4 `BrandDTO`:** top-level `eShopMvc.Web.Models.BrandDTO` (legacy: nested in `FilesController`),
+  without `[Serializable]` (BinaryFormatter only). Same name and properties, so R-1's JSON is
+  `[{"Id":…,"Brand":…}]`.
 
 ## Porting order
 1. Assessment: inventory incompatible APIs and packages; update the table above.
@@ -115,7 +141,8 @@ Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment
 - [x] Assessment
 - [x] Smoke tests
 - [x] New project created (template defaults; smoke tests vs new app: 0/44, expected)
-- [ ] Models / data / services
+- [x] Models and mock data source (`Catalog:UseMockData=true`; unit tests 16/16)
+- [ ] Data layer (EF Core) and services
 - [ ] Controllers
 - [ ] Views / static content
 - [ ] Config / logging

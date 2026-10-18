@@ -4,5 +4,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/eShopMvc.SmokeTests/eShopMvc.SmokeTests.csproj" />
+    <Project Path="tests/eShopMvc.Web.UnitTests/eShopMvc.Web.UnitTests.csproj" />
   </Folder>
 </Solution>
