@@ -47,6 +47,8 @@ eShopMvc/
 | Drop the new app's database | `dotnet ef database drop --project src/eShopMvc.Web` |
 | Update a client library (R-17) | `cd src/eShopMvc.Web; dotnet libman update <name> --to <version>` (e.g. `jquery --to 3.7.2`), then commit `libman.json` and `wwwroot/lib` |
 | Re-download client libraries | `cd src/eShopMvc.Web; dotnet libman restore` (only needed if `wwwroot/lib` was deleted) |
+| Health checks (app running) | `curl http://localhost:5070/health/live` (no dependencies), `curl http://localhost:5070/health/ready` (database in database mode); `Healthy` 200 or `Unhealthy` 503 |
+| Show EF Core SQL commands | `$env:Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command='Information'; dotnet run --project src/eShopMvc.Web` |
 | Smoke tests vs legacy (app must be running) | `dotnet test --project tests/eShopMvc.SmokeTests` |
 | Smoke tests vs new app (app must be running) | `$env:ESHOP_BASE_URL='http://localhost:5070'; $env:ESHOP_TARGET='new'; dotnet test --project tests/eShopMvc.SmokeTests` |
 
@@ -70,6 +72,32 @@ In MTP mode `dotnet test` takes no path argument; pass `--project <dir or .cspro
 Add every new project to `eShopMvc.slnx` (`dotnet sln eShopMvc.slnx add <path>`); there is no
 separate tests solution. Plain `dotnet test` at the root would also run the smoke tests, which
 need a running app.
+
+## Configuration
+Settings are validated before the app is built (`CatalogSettings.Validate`): misconfiguration stops
+startup with one message listing every problem. A database that can't be reached or migrated at
+startup is logged as Critical (server and database, never the password) and stops the app.
+
+| Legacy (Web.config, assessment 4.4) | New app | Override (environment variable) |
+|---|---|---|
+| `UseMockData` | `Catalog:UseMockData` in appsettings.json, default `false`; must be `true`/`false` | `Catalog__UseMockData` |
+| `UseCustomizationData` | Not ported (D10); setting it fails startup | none |
+| Unknown `Catalog:*` keys | Fail startup (catches typos) | none |
+| Connection string `CatalogDBContext` | `ConnectionStrings:CatalogDBContext`, only in appsettings.Development.json (D5); required and must parse in database mode | `ConnectionStrings__CatalogDBContext` |
+| `ClientValidationEnabled`, `UnobtrusiveJavaScriptEnabled` | ASP.NET Core defaults (on); no setting | none |
+| `webpages:Version`, `webpages:Enabled`, `httpRuntime targetFramework` | Not needed | none |
+| `<globalization culture="en-US">` | Code, `UseRequestLocalization` (R-12); deliberately not configurable | none |
+| `<sessionState mode="InProc">` | Code, `AddSession` (in-memory, 20 min) (R-11) | none |
+| `compilation debug` / Web.Release.config | Environment: Development = developer exception page; otherwise error page + HSTS | `ASPNETCORE_ENVIRONMENT` |
+| `log4Net.xml` | `Logging` section (levels, console formatter) | `Logging__LogLevel__<Category>`, `Logging__Console__FormatterName` |
+| `ApplicationInsights.config` | Dropped (R-26) | none |
+| *(new)* `AllowedHosts` | `*` (template default); may be restricted for Azure | `AllowedHosts` |
+| *(new)* listening URL | launchSettings.json, port 5070 (Development only) | `ASPNETCORE_HTTP_PORTS` or `ASPNETCORE_URLS` |
+
+Override rules: `__` stands for `:`; environment variables override appsettings*.json, and
+command-line arguments (`--Catalog:UseMockData=true`) override both. Category names with dots
+(`Logging__LogLevel__Microsoft.EntityFrameworkCore`) work in PowerShell (`$env:…`), Docker/compose
+`environment:` and Azure app settings, but not with bash `export`; use `env "NAME=value" cmd` there.
 
 ## Target stack
 Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment.md`.
@@ -99,6 +127,7 @@ Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment
   creates the sequences from the model; the scripts aren't ported.
 - `PictureFileName` is bindable on POST and used unchecked in a file path (path traversal).
 - The footer needs `Session_Start` emulation and an explicit `en-US` culture.
+- `UseHttpsRedirection` logs "Failed to determine the https port" on HTTP-only runs; decide TLS termination and redirection in step 10.
 
 ## Decisions
 - **R-1 `/api/files`:** contract change (.NET 10 cannot produce BinaryFormatter output).
@@ -235,6 +264,28 @@ Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment
   compiles in ASP.NET Core but binds `null` to `controllerName` and the attributes to route values
   (`?class=…`). Use named arguments: `ActionLink(text, action, routeValues: null, htmlAttributes: …)`.
   Applied in all five views (Index in step 6; Create, Delete, Details, Edit in step 7).
+- **L1 Log output** (step 8): console only. Development: `simple` formatter, single line, local time.
+  Elsewhere: `json` formatter, UTC timestamps, for container/Azure log collection (structured fields
+  stay searchable). No log file (legacy `logFiles/myapp.log`): it would need a third-party package and a
+  persistent writable volume; add one only for a concrete consumer.
+- **Log levels:** `Default` Information (includes the app's legacy-style "Now loading..." lines);
+  `Microsoft.AspNetCore` and `Microsoft.EntityFrameworkCore` Warning (no SQL command per query);
+  `Microsoft.EntityFrameworkCore.Migrations` and `Microsoft.Hosting.Lifetime` Information. Same in all
+  environments; pinned by `AppSettingsTests`.
+- **R-13 / L2 Per-request context:** console scopes on (`IncludeScopes`), so every request line carries
+  ASP.NET Core's `TraceId`/`SpanId` (the working "activity id"; also the request ID on the error page),
+  `RequestId`, `RequestPath`, plus `UserAgent` from `UserAgentLoggingScopeMiddleware` (legacy
+  "requestinfo"). The query string is not logged.
+- **L3 Health checks:** `/health/live` (no dependencies) and `/health/ready` (in database mode also
+  `CatalogDatabaseHealthCheck`, `Database.CanConnectAsync()`, 5 s timeout). Body is only
+  `Healthy`/`Unhealthy` (200/503); no session. Custom check, no package. Step 10 wires them to
+  Docker/Azure.
+- **R-26 / L4 Application Insights:** stays dropped; at the Azure step evaluate OpenTelemetry with the
+  Azure Monitor exporter rather than the classic SDK.
+- **Settings validation** (step 8): `CatalogSettings.Validate` runs before `Build()` and lists all
+  problems: `Catalog:UseMockData` not a boolean, unknown `Catalog:*` keys, `UseCustomizationData` (D10),
+  and in database mode a missing or unparseable connection string (never echoed). The validated value
+  is what `IOptions<CatalogOptions>` returns.
 
 ## Porting order
 1. Assessment: inventory incompatible APIs and packages; update the table above.
@@ -258,7 +309,7 @@ Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment
 - [x] Controllers (+ Index/CatalogTable views, D13; unit 101/101, integration 37/37;
   smoke vs new 28 passed / 12 failed / 4 skipped, all 12 need step-7 views; vs legacy 40/0/4)
 - [x] Views / static content (unit 107/107, integration 46/46; smoke vs new 40/0/4, vs legacy 40/0/4)
-- [ ] Config / logging
+- [x] Config / logging (unit 129/129, integration 51/51; smoke vs new 40/0/4, vs legacy 40/0/4)
 - [ ] Parity verified
 - [ ] Containerized
 

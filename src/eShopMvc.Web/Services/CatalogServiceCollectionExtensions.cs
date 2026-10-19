@@ -1,5 +1,6 @@
 using eShopMvc.Web.Models;
 using eShopMvc.Web.Models.Infrastructure;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -11,32 +12,28 @@ public static class CatalogServiceCollectionExtensions
     public const string ConnectionStringName = "CatalogDBContext";
 
     /// <summary>
-    /// Binds <see cref="CatalogOptions"/> and registers the <see cref="ICatalogService"/> implementation
-    /// for the configured mode (legacy: Modules/ApplicationModule.cs).
+    /// Validates the catalog configuration (<see cref="CatalogSettings"/>) and registers the
+    /// <see cref="ICatalogService"/> implementation for the configured mode (legacy: Modules/ApplicationModule.cs).
     /// </summary>
     public static IServiceCollection AddCatalogServices(this IServiceCollection services, IConfiguration configuration)
     {
-        var section = configuration.GetSection(CatalogOptions.SectionName);
-        services.Configure<CatalogOptions>(section);
+        // Throws before the app is built, listing every problem (step 8).
+        var options = CatalogSettings.Validate(configuration);
+        services.AddOptions<CatalogOptions>().Configure(o => o.UseMockData = options.UseMockData);
 
-        var options = section.Get<CatalogOptions>() ?? new CatalogOptions();
         if (options.UseMockData)
         {
             services.AddSingleton<ICatalogService, CatalogServiceMock>();
             return services;
         }
 
-        var connectionString = configuration.GetConnectionString(ConnectionStringName);
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            throw new InvalidOperationException(
-                $"{CatalogOptions.SectionName}:{nameof(CatalogOptions.UseMockData)} is false (database mode), but " +
-                $"ConnectionStrings:{ConnectionStringName} is not set. Set it (e.g. environment variable " +
-                $"ConnectionStrings__{ConnectionStringName}), or set {CatalogOptions.SectionName}:{nameof(CatalogOptions.UseMockData)}=true.");
-        }
-
+        var connectionString = configuration.GetConnectionString(ConnectionStringName)!;
         services.AddDbContext<CatalogDBContext>(db => db.UseCatalogDatabase(connectionString));
         services.AddScoped<ICatalogService, CatalogService>();
+
+        // Decision L3: readiness includes the database in database mode.
+        services.AddHealthChecks().AddCheck<CatalogDatabaseHealthCheck>(
+            CatalogDatabaseHealthCheck.Name, tags: [HealthEndpoints.ReadyTag], timeout: TimeSpan.FromSeconds(5));
         return services;
     }
 
@@ -52,6 +49,7 @@ public static class CatalogServiceCollectionExtensions
     /// <summary>
     /// In database mode, creates or migrates the database and seeds it if empty
     /// (legacy: CreateDatabaseIfNotExists + Seed, run on first request). No-op with mock data.
+    /// A failure is logged as Critical with the server, database and setting to check, then rethrown.
     /// </summary>
     public static async Task InitializeCatalogDatabaseAsync(this IHost app)
     {
@@ -61,6 +59,21 @@ public static class CatalogServiceCollectionExtensions
         }
 
         await using var scope = app.Services.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<CatalogDBContext>().Database.MigrateAsync();
+        var db = scope.ServiceProvider.GetRequiredService<CatalogDBContext>();
+        try
+        {
+            await db.Database.MigrateAsync();
+        }
+        catch (Exception ex)
+        {
+            // Server and database only: the connection string may contain a password.
+            var target = new SqlConnectionStringBuilder(db.Database.GetConnectionString());
+            app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(CatalogDBContext).FullName!).LogCritical(ex,
+                "Could not create or migrate the catalog database {Database} on server {Server}. Check that the server is " +
+                "running and reachable, and check ConnectionStrings:{ConnectionStringName} (environment variable " +
+                "ConnectionStrings__{ConnectionStringName}).",
+                target.InitialCatalog, target.DataSource, ConnectionStringName, ConnectionStringName);
+            throw;
+        }
     }
 }

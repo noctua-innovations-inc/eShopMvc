@@ -16,11 +16,18 @@ builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession();
 builder.Services.AddSingleton(TimeProvider.System);
 
+// Decision L3: /health/live and /health/ready (AddCatalogServices adds the database check in database mode).
+builder.Services.AddHealthChecks();
+
 var app = builder.Build();
 
 await app.InitializeCatalogDatabaseAsync();
 
 // Configure the HTTP request pipeline.
+
+// Decision L2: User-Agent in the logging scope of everything logged for the request (first, so it covers all).
+app.UseMiddleware<UserAgentLoggingScopeMiddleware>();
+
 if (!app.Environment.IsDevelopment())
 {
     // Decision R-23: generic error page; the middleware logs the exception.
@@ -56,6 +63,7 @@ app.MapControllerRoute(
     pattern: "{controller=Catalog}/{action=Index}/{id?}")
     .WithStaticAssets();
 
+app.MapCatalogHealthChecks();
 
 app.Run();
 
