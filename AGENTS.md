@@ -223,6 +223,18 @@ Parity verification (test results, every deliberate difference with its test, op
 - **R-24 UI quirks:** Edit labels showing `CatalogBrandId`/`CatalogTypeId` and the pager text
   (page size, not item count) are **preserved**. The missing picture on an invalid Edit re-render is
   **fixed** (`CatalogController` sets `PictureUri` before re-rendering).
+- **R-29 Banner heading on wide windows** (found in manual testing after step 10; legacy has the same
+  bug): above about 2,290 px the heading "Catalog manager (MVC)" left the banner and was drawn in white
+  over "Create New" and the first table row. Cause: `.esh-header:before` (an inline block as tall as the
+  banner) and `.esh-header-title` must share one line for the vertical centering; the heading grows with
+  `font-size: 4vw` while Bootstrap's `.container` stops at 1140 px, so once the heading (~12 em) no longer
+  fits, it wraps to a second line below the banner, and `.esh-app-hero` doesn't clip. **Fixed**, a
+  deliberate deviation from legacy like the R-24 Edit image: `white-space: nowrap` on `.esh-header`
+  (`wwwroot/css/site.css`). No change where it already worked. Not testable automatically; verified
+  with headless Edge screenshots at 1024, 1280, 1920, 2200, 2300, 2560 and 3840 px (identical before
+  and after up to 2200 px; heading inside the banner at 2300 px and above; legacy broken at 2560 px;
+  container identical to local). Confirmed by the maintainer in Edge at full screen width (about
+  2,560 px) on the container, 2026-10-18.
 - **Views use `Html.*` helpers** as in legacy (closest HTML); tag helpers only for `<partial>` and `~/`
   resolution. Converting to tag helpers is a possible clean-up after parity.
 - **Create view, R-9:** legacy's Create form has no `PictureFileName` field and its validation message

@@ -9,6 +9,7 @@
 /* Header */
 .esh-header {
     height: 100%;
+    white-space: nowrap; /* Decision R-29: keep the heading on the centering line at any width */
 }
 
 .esh-header:before {
