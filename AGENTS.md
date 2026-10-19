@@ -19,6 +19,9 @@ eShopMvc/
   dotnet-tools.json                local tools (dotnet-ef 10.0.13, libman 3.0.114); `dotnet tool restore`
   global.json                      dotnet test runner = Microsoft.Testing.Platform
   run-legacy.ps1                   builds and runs the legacy app
+  docker-compose.yml               new app + SQL Server 2022 on Linux (step 10), http://localhost:5080
+  .env.example                     template for .env (git-ignored): MSSQL_SA_PASSWORD, optional TZ
+  src/eShopMvc.Web/Dockerfile      multi-stage Linux image (build context: src/eShopMvc.Web)
   AGENTS.md                        this file
   CLAUDE.md                        imports this file for Claude Code
 ```
@@ -52,6 +55,13 @@ eShopMvc/
 | Show EF Core SQL commands | `$env:Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command='Information'; dotnet run --project src/eShopMvc.Web` |
 | Smoke tests vs legacy (app must be running) | `$env:ESHOP_BASE_URL='http://localhost:5050'; $env:ESHOP_TARGET='legacy'; dotnet test --project tests/eShopMvc.SmokeTests` (set both explicitly: `$env:` values from a new-app run stay set in the same session) |
 | Smoke tests vs new app (app must be running) | `$env:ESHOP_BASE_URL='http://localhost:5070'; $env:ESHOP_TARGET='new'; dotnet test --project tests/eShopMvc.SmokeTests` |
+| Containers: first-time setup | `Copy-Item .env.example .env`, then set `MSSQL_SA_PASSWORD` in `.env` (never commit `.env`) |
+| Containers: build and start | `docker compose up -d --build` → http://localhost:5080; `docker compose ps` shows both services `healthy` |
+| Containers: logs | `docker compose logs -f web` (JSON, Production) |
+| Containers: stop (keep database) | `docker compose down` |
+| Containers: stop and delete database | `docker compose down -v` (also deletes the Data Protection keys, so forms opened before it fail once; next start migrates and seeds again) |
+| Containers: query the database | `docker compose exec sqlserver bash -c '/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -d eShopMvc.CatalogDb -Q "SELECT COUNT(*) FROM Catalog"'` |
+| Smoke tests vs container | `$env:ESHOP_BASE_URL='http://localhost:5080'; $env:ESHOP_TARGET='new'; dotnet test --project tests/eShopMvc.SmokeTests` |
 
 The legacy app needs the VS Developer PowerShell (handled by `run-legacy.ps1`)
 and runs in database mode (`UseMockData=false`, LocalDB; see Decisions R-2).
@@ -93,7 +103,9 @@ startup is logged as Critical (server and database, never the password) and stop
 | `log4Net.xml` | `Logging` section (levels, console formatter) | `Logging__LogLevel__<Category>`, `Logging__Console__FormatterName` |
 | `ApplicationInsights.config` | Dropped (R-26) | none |
 | *(new)* `AllowedHosts` | `*` (template default); may be restricted for Azure | `AllowedHosts` |
-| *(new)* listening URL | launchSettings.json, port 5070 (Development only) | `ASPNETCORE_HTTP_PORTS` or `ASPNETCORE_URLS` |
+| *(new)* listening URL | launchSettings.json, port 5070 (Development only); container: 8080 (image default), published as host port 5080 | `ASPNETCORE_HTTP_PORTS` or `ASPNETCORE_URLS` |
+| *(new)* forwarded headers (R-10) | Off by default; on behind a proxy (D-D). **Trusts `X-Forwarded-*` from any sender**: enable only where the app is reachable solely through a proxy that sets them (e.g. Azure's front end), never where clients can reach it directly | `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` |
+| *(new)* footer time zone (R-11) | Container: UTC unless `TZ` is set (D-E) | `TZ` (e.g. `Europe/Berlin`; in compose via `.env`) |
 
 Override rules: `__` stands for `:`; environment variables override appsettings*.json, and
 command-line arguments (`--Catalog:UseMockData=true`) override both. Category names with dots
@@ -109,7 +121,7 @@ Parity verification (test results, every deliberate difference with its test, op
 | .NET Framework 4.8, ASP.NET MVC 5.2.7 + Web API 2 (5.2.7), `Global.asax` | .NET 10, ASP.NET Core MVC + API controllers in one app, `Program.cs` |
 | `Web.config` appSettings (`UseMockData`, `UseCustomizationData`), XDT transforms | `appsettings.json` / `appsettings.{Env}.json` + options pattern |
 | EF6 6.2.0, `CreateDatabaseIfNotExists` + seed, HiLo IDs via SQL sequences | EF Core (SQL Server), migrations + startup seeding; item IDs via `UseHiLo("catalog_hilo")`, brand/type IDs IDENTITY (R-21, D6, D8) |
-| LocalDB, Integrated Security | Development: LocalDB `eShopMvc.CatalogDb` (D5); step 10: SQL Server container, SQL auth (R-3) |
+| LocalDB, Integrated Security | Development: LocalDB `eShopMvc.CatalogDb` (D5); compose: SQL Server 2022 container, SQL auth (R-3, step 10) |
 | Autofac 6.1 (+ Mvc5 / WebApi2 integration) | Built-in `Microsoft.Extensions.DependencyInjection` |
 | log4net 2.0.10 (rolling file) | `ILogger<T>`, console only (readable in Development, JSON elsewhere; L1) |
 | Application Insights 2.9.1 (no key in source) | Dropped; revisit at the Azure step |
@@ -130,9 +142,12 @@ Parity verification (test results, every deliberate difference with its test, op
   creates the sequences from the model; the scripts aren't ported.
 - ~~`PictureFileName` is bindable on POST and used unchecked in a file path (path traversal).~~ Resolved by R-9.
 - ~~The footer needs `Session_Start` emulation and an explicit `en-US` culture.~~ Resolved by R-11 and R-12.
-- `UseHttpsRedirection` logs "Failed to determine the https port" on HTTP-only runs; decide TLS termination and redirection in step 10.
-- Other open items for step 10 (SQL auth, ICU, footer machine name/time zone, forwarded headers, health
-  probes, migrations, D12): see `docs/parity.md`, "Open items for step 10".
+- ~~`UseHttpsRedirection` logs "Failed to determine the https port" on HTTP-only runs.~~ Resolved by D-D
+  (redirection removed; TLS and redirects belong to the proxy / Azure front end).
+- **Data Protection keys** (found in step 10): locally solved by D-H (compose volume; keys unencrypted).
+  Open for Azure: a shared, encrypted key store, so tokens and session cookies work across restarts and
+  replicas (D-H).
+- Remaining items for the Azure step: see `docs/parity.md`, "Step 10 (containers): outcome and open items".
 
 ## Decisions
 - **R-1 `/api/files`:** contract change (.NET 10 cannot produce BinaryFormatter output).
@@ -295,6 +310,45 @@ Parity verification (test results, every deliberate difference with its test, op
   problems: `Catalog:UseMockData` not a boolean, unknown `Catalog:*` keys, `UseCustomizationData` (D10),
   and in database mode a missing or unparseable connection string (never echoed). The validated value
   is what `IOptions<CatalogOptions>` returns.
+- **D-A Base image** (step 10): `mcr.microsoft.com/dotnet/aspnet:10.0.13-noble` (Ubuntu 24.04; .NET 10 has
+  no Debian images), build with `sdk:10.0.402-noble`. Has ICU 74 (R-12, not invariant), time zone data,
+  and bash for the health check; runs as the built-in non-root `app` user (UID 1654); `/app` is not
+  writable. Image 461 MB uncompressed. `noble-chiseled-extra` (smaller, no shell) is an option for Azure,
+  where probes are HTTP and need no command inside the container.
+- **D-B Container health check:** bash `/dev/tcp` request to `/health/ready` (Dockerfile `HEALTHCHECK`,
+  no curl/wget). SQL Server: `sqlcmd -Q "SELECT 1"`; `web` starts only after `sqlserver` is healthy.
+  Azure later: liveness `/health/live`, readiness `/health/ready`.
+- **D-C Container environment:** `Production` in compose (JSON logs, error page, HSTS, which is a no-op
+  over HTTP); overridable with `ASPNETCORE_ENVIRONMENT` in `.env`.
+- **D-D HTTPS and forwarded headers:** `UseHttpsRedirection` removed (TLS and the HTTP→HTTPS redirect
+  belong to the proxy / Azure front end; legacy never redirected either); `UseHsts` stays. Forwarded
+  headers via the built-in `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` (no code): off in compose (no
+  proxy), on in Azure so picture URLs get the public scheme (R-10). **Security:** this setting trusts
+  `X-Forwarded-For`/`X-Forwarded-Proto` from any sender. Enable it only where the app is reachable
+  solely through a proxy that sets those headers (e.g. Azure's front end), never where clients can
+  reach it directly. Tested by `ForwardedHeadersTests`.
+- **D-E Footer in containers (R-11):** compose sets `hostname: eshopmvc-web` (instead of the container
+  ID) and the clock is UTC; `TZ` in `.env` switches to a local zone (.NET honors `TZ` on Linux).
+- **D-F Database persistence:** named volume `sqlserver-data`; `docker compose down` keeps the database,
+  `down -v` deletes it. Note: SQL Server's sequence cache makes `catalog_hilo` jump after a SQL Server
+  restart (gaps in new item IDs, never duplicates), as with the legacy scripts' `CACHE`.
+- **D-G Migrations in containers:** `MigrateAsync()` at startup for compose (EF Core's migration lock
+  covers concurrent replicas). For Azure: apply migrations from the pipeline (idempotent script or
+  bundle) with a schema-changing identity, give the app a data-only identity, and switch startup
+  migration off by configuration.
+- **Container secrets:** `.env` (git-ignored, `.gitignore` line 7) holds `MSSQL_SA_PASSWORD`; compose
+  refuses to start without it; `.env.example` is the committed template. The compose connection
+  string uses `sa` and `TrustServerCertificate=True`, both for the local container only.
+- **D-H Data Protection keys in compose:** named volume `dataprotection-keys` on
+  `/home/app/.aspnet/DataProtection-Keys` (the Dockerfile pre-creates it owned by `app`). It solves
+  restarts locally: a form opened before `docker compose down`/`up` still submits (302); with the
+  volume removed the same submission fails with 400 (verified 2026-10-18). The keys are stored
+  **unencrypted**, so the "No XML encryptor configured" warning is expected in compose. Session
+  *contents* still don't survive a restart: they live in the in-memory cache (R-11), as legacy InProc
+  session was lost on an IIS restart. **Azure (open decision):** a shared, encrypted key store (e.g.
+  Blob Storage for the keys plus Key Vault to encrypt them; needs packages such as
+  `Azure.Extensions.AspNetCore.DataProtection.Blobs` and `.Keys`), plus a shared session store or
+  sticky sessions if scaled out.
 
 ## Porting order
 1. Assessment: inventory incompatible APIs and packages; update the table above.
@@ -321,6 +375,7 @@ Parity verification (test results, every deliberate difference with its test, op
 - [x] Config / logging (unit 129/129, integration 51/51; smoke vs new 40/0/4, vs legacy 40/0/4)
 - [x] Parity verified (2026-10-18, `5f9a1ea` + step-9 tests; fresh-database start; unit 129/129,
   integration 61/61, smoke vs new 40/0/4, vs legacy 40/0/4; see `docs/parity.md`)
-- [ ] Containerized
+- [x] Containerized (Linux image + compose with SQL Server; smoke vs container 40/0/4; unit 129/129,
+  integration 64/64; vs legacy 40/0/4; persistence across down/up verified)
 
 Update this checklist as steps complete.

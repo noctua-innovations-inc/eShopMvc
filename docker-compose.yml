@@ -1,0 +1,51 @@
+# Step 10: the new app on Linux with SQL Server (SQL authentication, R-3).
+# Secrets come from .env (git-ignored); copy .env.example to .env and set MSSQL_SA_PASSWORD first.
+#   docker compose up -d --build   → http://localhost:5080
+#   docker compose down            keeps the database (named volume, Decision D-F)
+#   docker compose down -v         deletes it; the next start migrates and seeds again
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD in .env (see .env.example)}
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    # No host port: only the web service (and docker compose exec) can reach the database.
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q \"SELECT 1\" -b -o /dev/null"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 10
+
+  web:
+    build:
+      context: ./src/eShopMvc.Web
+    image: eshopmvc-web:local
+    # Decision D-E: readable machine name in the footer (R-11) instead of the container ID.
+    hostname: eshopmvc-web
+    ports:
+      - "5080:8080"
+    volumes:
+      # Decision D-H: keep the Data Protection keys across container recreation, so antiforgery tokens
+      # and session cookies issued before a restart stay valid. Stored unencrypted (local only).
+      - dataprotection-keys:/home/app/.aspnet/DataProtection-Keys
+    environment:
+      # Decision D-C: production configuration (JSON logs, error page); override in .env for debugging.
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      # Decision D5: the connection string only ever comes from the environment. TrustServerCertificate
+      # is for this local container's self-signed certificate only, never for Azure.
+      ConnectionStrings__CatalogDBContext: "Server=sqlserver,1433;Database=eShopMvc.CatalogDb;User ID=sa;Password=${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD in .env (see .env.example)};Encrypt=True;TrustServerCertificate=True"
+      # Decision D-E: UTC unless TZ is set in .env (e.g. TZ=Europe/Berlin).
+      TZ: ${TZ:-Etc/UTC}
+      # Decision D-D: ASPNETCORE_FORWARDEDHEADERS_ENABLED stays off here: no proxy in front of the app.
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+
+volumes:
+  sqlserver-data:
+  dataprotection-keys:

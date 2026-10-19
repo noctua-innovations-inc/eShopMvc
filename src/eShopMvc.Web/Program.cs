@@ -36,7 +36,8 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// Decision D-D: no UseHttpsRedirection. TLS ends at the proxy / Azure front end, which also redirects;
+// behind one, ASPNETCORE_FORWARDEDHEADERS_ENABLED=true lets the app see the original scheme (R-10).
 
 // Decision R-12: always en-US, as legacy's <globalization culture="en-US" uiCulture="en-US" />.
 // No culture providers, so Accept-Language can't change price binding or formatting;

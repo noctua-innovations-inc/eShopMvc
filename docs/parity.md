@@ -19,14 +19,15 @@ the background is in `docs/assessment.md`.
 | Fresh start | `eShopMvc.CatalogDb` dropped, app started with default settings (step 9) | Migration `Initial` applied; 12 items (IDs 1–12), 5 brands, 4 types; `/health/ready` 200 |
 | Manual browser check | Performed by the maintainer on 2026-10-18 | Pages, styling and the footer look the same |
 
-### Test results (2026-10-18, `5f9a1ea` + step-9 tests)
+### Test results (2026-10-18; `5f9a1ea` + step-9 tests, updated after step 10)
 
 | Suite | Target | Passed | Failed | Skipped |
 |---|---|---|---|---|
 | Unit (`tests/eShopMvc.Web.UnitTests`) | none | 129 | 0 | 0 |
-| Integration (`tests/eShopMvc.Web.IntegrationTests`, LocalDB test database + in-process app) | none | 61 | 0 | 0 |
+| Integration (`tests/eShopMvc.Web.IntegrationTests`, LocalDB test database + in-process app) | none | 64 | 0 | 0 |
 | Smoke | New app, database mode, `ESHOP_TARGET=new` | 40 | 0 | 4 |
 | Smoke | Legacy app, `ESHOP_TARGET=legacy` | 40 | 0 | 4 |
+| Smoke (step 10) | New app in the Linux container, `http://localhost:5080`, `ESHOP_TARGET=new` | 40 | 0 | 4 |
 
 The 4 skipped smoke tests on each side are the other target's cases for R-1 and R-9
 (`Files_Legacy_*`, `FilesV1_Legacy_*`, `*_Legacy_AcceptsTraversal*` on the new app; the `*_New_*`
@@ -106,21 +107,25 @@ Every decision that changes what a user, client or operator can observe. Test na
 - **Later phases (after parity):** Bootstrap 5 / jQuery 4 (R-17); converting views to tag helpers;
   a React or Blazor UI.
 
-## Open items for step 10 (containers)
+## Step 10 (containers): outcome and open items
 
-- **HTTPS redirection:** `UseHttpsRedirection` logs "Failed to determine the https port" on HTTP-only
-  runs; decide where TLS ends (container ingress / Azure front end) and whether to redirect.
-- **SQL authentication (R-3):** the container connection string uses SQL auth via
-  `ConnectionStrings__CatalogDBContext`; no password in the repo.
-- **ICU (R-12):** the image must include ICU; don't enable `InvariantGlobalization`.
-- **Footer (R-11):** machine name becomes the container hostname; the container time zone is usually
-  UTC; in-memory session needs sticky sessions or a shared store when scaled out.
-- **Forwarded headers (R-10):** absolute picture URLs use the request scheme and host; behind a proxy
-  they need forwarded-headers middleware.
-- **Health checks (L3):** wire `/health/live` and `/health/ready` into Docker and Azure probes.
-- **Pictures (R-9):** publish `Pics/` with the app (csproj already does) and keep the content root
-  readable; nothing writes to it.
-- **Migrations (D6):** decide whether the container applies migrations at startup or a pipeline step
-  does (idempotent script / migration bundle).
-- **D12:** remove the direct `System.Security.Cryptography.Pkcs` reference once EF Core's SqlClient
-  depends on a patched version.
+Verified 2026-10-18 with `docker compose` (Linux engine): image `eshopmvc-web:local` from
+`aspnet:10.0.13-noble`, SQL Server `2022-CU27-ubuntu-22.04`. Smoke tests against the container
+(`http://localhost:5080`, `ESHOP_TARGET=new`): **40 passed, 0 failed, 4 skipped** (again after D-H), the first run on a
+case-sensitive file system (R-6). Fresh start seeded 12 / 5 / 4; `docker compose down` / `up` kept the
+database (same creation date, "No migrations were applied"); `down -v` started fresh.
+
+| Item | Outcome |
+|---|---|
+| HTTPS redirection | **Done (D-D):** `UseHttpsRedirection` removed; TLS and redirects belong to the proxy / Azure front end. The startup warning is gone. Test `ForwardedHeadersTests.PlainHttp_IsServedWithoutRedirect` |
+| SQL authentication (R-3) | **Done for compose:** `sa` login, connection string from `.env` via `ConnectionStrings__CatalogDBContext`, `TrustServerCertificate=True` for the local self-signed certificate. **Azure:** own login or managed identity, real certificate |
+| ICU (R-12) | **Verified:** ICU 74 in the image, globalization not invariant; prices render `$19.50` |
+| Footer (R-11) | **Done (D-E):** `eshopmvc-web, <UTC time>`; `TZ` optional. In-memory session still needs sticky sessions or a shared store when scaled out (Azure) |
+| Forwarded headers (R-10) | **Ready (D-D):** `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`, off in compose. Only where clients can't reach the app directly. Tests `ForwardedHeadersTests.*` |
+| Health checks (L3) | **Done for compose (D-B):** image `HEALTHCHECK` on `/health/ready`; `web` waits for a healthy `sqlserver`. **Azure:** HTTP probes `/health/live`, `/health/ready` |
+| Pictures (R-9) | **Verified:** 13 files in `/app/Pics`, read-only for the app user; `/Pics/1.png` 404 |
+| Migrations (D6) | **Compose (D-G):** at startup. **Azure:** pipeline with a schema-changing identity; startup migration off |
+| D12 | **Open:** remove the direct `System.Security.Cryptography.Pkcs` reference once EF Core's SqlClient depends on a patched version |
+| **Data Protection keys** | **Compose: done (D-H):** named volume `dataprotection-keys`; a form opened before `down`/`up` still submits (302), and fails with 400 when the volume is removed. Keys are unencrypted, so the "No XML encryptor configured" warning is expected. **Azure: open:** shared, encrypted key store (e.g. Blob Storage + Key Vault; packages needed) so tokens work across restarts and replicas |
+| Session across restarts | Session *contents* are lost when the app restarts (in-memory cache, R-11), as with legacy InProc session. **Azure: open** together with scale-out: shared session store (needs a package) or sticky sessions |
+| Footer clock (difference) | Legacy printed the server's local time; containers print UTC unless `TZ` is set. Deployment setting, not code |
