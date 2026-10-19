@@ -47,6 +47,40 @@ public sealed partial class LayoutAndFormTests(MockModeAppFactory factory) : ICl
         }
     }
 
+    [Theory]
+    [InlineData("/")]
+    [InlineData("/Catalog/Create")]
+    public async Task Layout_LoadsNoModernizrOrRespond(string path)
+    {
+        // Decision R-18: legacy loaded modernizr-2.6.2.js, modernizr-2.8.3.js and respond.js.
+        using var client = factory.CreateRawClient();
+
+        var html = await client.GetStringAsync(path, Token);
+
+        var scripts = Regex.Matches(html, "<script[^>]*src=\"(?<src>[^\"]+)\"").Select(m => m.Groups["src"].Value).ToList();
+        Assert.NotEmpty(scripts);
+        Assert.DoesNotContain(scripts, s => s.Contains("modernizr", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(scripts, s => s.Contains("respond", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain("modernizr", html, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task DeletePost_MissingIdWithValidAntiforgeryToken_Returns404AndDeletesNothing()
+    {
+        // Decision R-15 end to end (legacy: 500 in database mode).
+        using var client = factory.CreateClient();
+        var form = await client.GetStringAsync("/Catalog/Delete/1", Token);
+        var token = TokenValue().Match(form).Groups["token"].Value;
+        Assert.NotEmpty(token);
+
+        using var response = await client.PostAsync("/Catalog/Delete/999999",
+            new FormUrlEncodedContent([new("__RequestVerificationToken", token)]), Token);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        using var stillThere = await client.GetAsync("/Catalog/Details/1", Token);
+        Assert.Equal(HttpStatusCode.OK, stillThere.StatusCode);
+    }
+
     [Fact]
     public async Task CssReferencedFontsAndImages_Load()
     {

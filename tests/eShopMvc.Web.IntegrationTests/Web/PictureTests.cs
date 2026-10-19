@@ -41,6 +41,19 @@ public sealed class PictureTests(MockModeAppFactory factory) : IClassFixture<Moc
     }
 
     [Theory]
+    [InlineData("/Pics/1.png")]
+    [InlineData("/pics/dummy.png")]
+    public async Task PicsFolder_IsNotServedDirectly(string path)
+    {
+        // Decision R-9: legacy IIS also served ~/Pics as static files; here only /items/{id}/pic serves them.
+        using var client = factory.CreateRawClient();
+
+        using var response = await client.GetAsync(path, Token);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Theory]
     [InlineData("..", "appsettings.json")]
     [InlineData("..", "..", "eShopMvc.slnx")]
     public async Task Picture_StoredNameOutsidePics_Returns404(params string[] pathParts)

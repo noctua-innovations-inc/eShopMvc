@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Catalog pictures, served only through /items/{id}/pic (outside wwwroot, as legacy ~/Pics). -->
+    <!-- Catalog pictures, outside wwwroot, served only through /items/{id}/pic (legacy also served ~/Pics directly; Decision R-9). -->
     <Content Include="Pics\**" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 

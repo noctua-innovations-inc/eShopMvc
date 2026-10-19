@@ -14,6 +14,7 @@ eShopMvc/
   tests/eShopMvc.SmokeTests/       HTTP smoke tests, runnable against either app
   tests/eShopMvc.Web.UnitTests/    unit tests for src/eShopMvc.Web (no running app, no database)
   tests/eShopMvc.Web.IntegrationTests/  database tests (own LocalDB test database; see D11)
+  docs/                            assessment.md (step 1), parity.md (step 9)
   eShopMvc.slnx                    the only solution: web app + test projects
   dotnet-tools.json                local tools (dotnet-ef 10.0.13, libman 3.0.114); `dotnet tool restore`
   global.json                      dotnet test runner = Microsoft.Testing.Platform
@@ -49,7 +50,7 @@ eShopMvc/
 | Re-download client libraries | `cd src/eShopMvc.Web; dotnet libman restore` (only needed if `wwwroot/lib` was deleted) |
 | Health checks (app running) | `curl http://localhost:5070/health/live` (no dependencies), `curl http://localhost:5070/health/ready` (database in database mode); `Healthy` 200 or `Unhealthy` 503 |
 | Show EF Core SQL commands | `$env:Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command='Information'; dotnet run --project src/eShopMvc.Web` |
-| Smoke tests vs legacy (app must be running) | `dotnet test --project tests/eShopMvc.SmokeTests` |
+| Smoke tests vs legacy (app must be running) | `$env:ESHOP_BASE_URL='http://localhost:5050'; $env:ESHOP_TARGET='legacy'; dotnet test --project tests/eShopMvc.SmokeTests` (set both explicitly: `$env:` values from a new-app run stay set in the same session) |
 | Smoke tests vs new app (app must be running) | `$env:ESHOP_BASE_URL='http://localhost:5070'; $env:ESHOP_TARGET='new'; dotnet test --project tests/eShopMvc.SmokeTests` |
 
 The legacy app needs the VS Developer PowerShell (handled by `run-legacy.ps1`)
@@ -101,33 +102,37 @@ command-line arguments (`--Catalog:UseMockData=true`) override both. Category na
 
 ## Target stack
 Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment.md`.
+Parity verification (test results, every deliberate difference with its test, open items): `docs/parity.md`.
 
 | Legacy | Target |
 |---|---|
 | .NET Framework 4.8, ASP.NET MVC 5.2.7 + Web API 2 (5.2.7), `Global.asax` | .NET 10, ASP.NET Core MVC + API controllers in one app, `Program.cs` |
 | `Web.config` appSettings (`UseMockData`, `UseCustomizationData`), XDT transforms | `appsettings.json` / `appsettings.{Env}.json` + options pattern |
 | EF6 6.2.0, `CreateDatabaseIfNotExists` + seed, HiLo IDs via SQL sequences | EF Core (SQL Server), migrations + startup seeding; item IDs via `UseHiLo("catalog_hilo")`, brand/type IDs IDENTITY (R-21, D6, D8) |
-| LocalDB, Integrated Security | SQL Server container, SQL auth |
+| LocalDB, Integrated Security | Development: LocalDB `eShopMvc.CatalogDb` (D5); step 10: SQL Server container, SQL auth (R-3) |
 | Autofac 6.1 (+ Mvc5 / WebApi2 integration) | Built-in `Microsoft.Extensions.DependencyInjection` |
-| log4net 2.0.10 (rolling file) | `ILogger<T>` |
+| log4net 2.0.10 (rolling file) | `ILogger<T>`, console only (readable in Development, JSON elsewhere; L1) |
 | Application Insights 2.9.1 (no key in source) | Dropped; revisit at the Azure step |
 | InProc session (`Session_Start` → footer) | Session middleware |
 | `HandleErrorAttribute` | `UseExceptionHandler` + Error view |
-| System.Web.Optimization bundles | Static files in `wwwroot` |
-| `BinaryFormatter` (`/api/files`) | None in .NET 10; decision needed |
+| System.Web.Optimization bundles | Static files in `wwwroot`; client libraries via LibMan, committed (R-17) |
+| `BinaryFormatter` (`/api/files`) | `/api/v1/files` returns JSON; `/api/files` returns 410 (R-1) |
 | packages.config + PackageReference mixed, non-SDK `.csproj` | SDK-style `.csproj`, PackageReference |
 | IIS Express / Windows Container (per the book) | Kestrel / Linux container |
 
 ## Known risks
-- `/api/files` uses BinaryFormatter, which .NET 10 doesn't support. Decide whether to drop it or change its format.
-- The committed `Web.config` has `UseMockData=false` (EF6 + LocalDB), which contradicts the Commands note above. Confirm the baseline mode.
-- Linux is case-sensitive: `log4Net.xml`, `Content/Site.css`, `Images/` are referenced with different casing.
-- JSON for `/api/brands` becomes camelCase by default (legacy is PascalCase).
+- ~~`/api/files` uses BinaryFormatter, which .NET 10 doesn't support.~~ Resolved by R-1.
+- ~~The committed `Web.config` has `UseMockData=false`, contradicting the old Commands note.~~ Resolved by R-2 (database mode).
+- ~~Linux is case-sensitive: `log4Net.xml`, `Content/Site.css`, `Images/` are referenced with different casing.~~
+  Resolved by R-6 (lowercase `wwwroot` paths) and L1 (no log4net).
+- ~~JSON for `/api/brands` becomes camelCase by default.~~ Resolved by R-7 (PascalCase).
 - ~~Seed SQL scripts hard-code `USE [<db name>]` and backslash paths.~~ Resolved by D7: EF Core
   creates the sequences from the model; the scripts aren't ported.
-- `PictureFileName` is bindable on POST and used unchecked in a file path (path traversal).
-- The footer needs `Session_Start` emulation and an explicit `en-US` culture.
+- ~~`PictureFileName` is bindable on POST and used unchecked in a file path (path traversal).~~ Resolved by R-9.
+- ~~The footer needs `Session_Start` emulation and an explicit `en-US` culture.~~ Resolved by R-11 and R-12.
 - `UseHttpsRedirection` logs "Failed to determine the https port" on HTTP-only runs; decide TLS termination and redirection in step 10.
+- Other open items for step 10 (SQL auth, ICU, footer machine name/time zone, forwarded headers, health
+  probes, migrations, D12): see `docs/parity.md`, "Open items for step 10".
 
 ## Decisions
 - **R-1 `/api/files`:** contract change (.NET 10 cannot produce BinaryFormatter output).
@@ -156,6 +161,10 @@ Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment
   - Pictures live in `src/eShopMvc.Web/Pics` (copied from legacy), outside `wwwroot`, served only via
     `/items/{id}/pic`; the csproj publishes them. MIME mapping unchanged (case-sensitive). A missing
     file still throws (500), as in legacy.
+  - **Pictures folder** (step 9): direct `/Pics/...` URLs return **404**. Legacy IIS *did* serve
+    `~/Pics/<file>` as static files (200, checked 2026-10-18); the step-6 assumption that it didn't was
+    wrong. Deliberate: one way to serve pictures, through the validated endpoint. Tested by
+    `PictureTests.PicsFolder_IsNotServedDirectly`.
 - **R-12 Culture** (step 6): `UseRequestLocalization` with `en-US` (no user overrides) as the only
   culture and no request culture providers, so `Accept-Language` can't change price binding or
   formatting (legacy: fixed `<globalization culture="en-US" uiCulture="en-US" />`). Containers need
@@ -310,7 +319,8 @@ Full assessment (packages, APIs, routes, risks with file:line): `docs/assessment
   smoke vs new 28 passed / 12 failed / 4 skipped, all 12 need step-7 views; vs legacy 40/0/4)
 - [x] Views / static content (unit 107/107, integration 46/46; smoke vs new 40/0/4, vs legacy 40/0/4)
 - [x] Config / logging (unit 129/129, integration 51/51; smoke vs new 40/0/4, vs legacy 40/0/4)
-- [ ] Parity verified
+- [x] Parity verified (2026-10-18, `5f9a1ea` + step-9 tests; fresh-database start; unit 129/129,
+  integration 61/61, smoke vs new 40/0/4, vs legacy 40/0/4; see `docs/parity.md`)
 - [ ] Containerized
 
 Update this checklist as steps complete.
