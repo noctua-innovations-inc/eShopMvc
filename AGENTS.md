@@ -13,7 +13,7 @@ eShopMvc/
   tests/eShopMvc.Web.UnitTests/    unit tests for src/eShopMvc.Web (no running app, no database)
   tests/eShopMvc.Web.IntegrationTests/  database tests (own LocalDB test database; see D11)
   docs/                            assessment.md (step 1), parity.md (step 9)
-  docs/agents/                     phase documents (phase-01-port.md); see "Current phase"
+  docs/agents/                     phase documents (phase-01-port.md, phase-02-react.md); see "Current phase"
   eShopMvc.slnx                    the only solution: web app + test projects
   dotnet-tools.json                local tools (dotnet-ef 10.0.13, libman 3.0.114); `dotnet tool restore`
   global.json                      dotnet test runner = Microsoft.Testing.Platform
@@ -114,7 +114,8 @@ command-line arguments (`--Catalog:UseMockData=true`) override both. Category na
 ## Phases
 - Phase 1 (complete): port to ASP.NET Core MVC on .NET 10.
   See `docs/agents/phase-01-port.md`.
-- Phase 2 (next): replace the Razor UI with React. Phase document to follow.
+- Phase 2 (current): replace the Razor UI with React.
+  See `docs/agents/phase-02-react.md`.
 
 ## Current phase
 Before starting any task, read the current phase document named

@@ -1,0 +1,150 @@
+# Phase 2: replace the Razor UI with React
+
+> **Current phase.** Read this file before starting any task. The project-wide rules in `AGENTS.md`
+> still apply; this file adds the goal, decisions and steps of phase 2. Phase 1 decisions
+> (R-*, D*, L*, D-*) are in `docs/agents/phase-01-port.md` and stay in force unless a P2 decision
+> below changes one of them.
+
+## Goal
+Replace the server-rendered Razor catalog pages of `src/eShopMvc.Web` with a **React** single-page
+app (TypeScript, Vite, React Router), served by the same ASP.NET Core app, backed by a new JSON
+catalog API. Keep the same pages, URLs, look and behavior as the Razor UI at the end of phase 1.
+Afterwards the Razor catalog views are gone and the app still runs locally and in the Linux container.
+
+**Reference behavior** is the Razor UI as of the end of phase 1 (commit `e93969e`), plus the
+deliberate differences in `docs/parity.md`. `legacy/` stays read-only and is no longer the parity
+target for the UI; the smoke tests can still run against it.
+
+## Non-goals (ask before doing any of these)
+- Visual redesign, Bootstrap 5, a component library, CSS-in-JS (R-17: major upgrades are a separate step).
+- Server-side rendering, Next.js or another meta-framework.
+- State management or data-fetching libraries (Redux, TanStack Query, …); use React state and `fetch`.
+- Authentication, Azure deployment, database or EF Core changes.
+- Changes to `/api/brands`, `/api/files`, `/api/v1/files`, `/items/{id}/pic` or the health endpoints.
+
+## Phase 2 rules (in addition to the ground rules in AGENTS.md)
+- Steps follow the order below; one step at a time, plan first for multi-file steps.
+- After every step, in addition to `dotnet build` and the smoke tests: once `src/eShopMvc.Client`
+  exists, `npm ci`, `npm run build` (includes type checking) and `npm test` must pass there; once
+  the Playwright project exists, its tests must pass against the running app.
+- **npm packages:** only the ones listed under P2-5. Ask before adding any other. Exact versions
+  (`save-exact`, no `^`/`~`), `package-lock.json` committed, `npm ci` in scripts and the Dockerfile.
+- **NuGet packages:** none are expected for this phase (antiforgery, Problem Details and the SPA
+  fallback are built in). Ask as usual if one turns out to be needed.
+- **Routes:** only the changes listed in P2-4 and P2-9.
+- Every deliberate difference from the Razor UI gets a P2 decision here and a test, as in phase 1.
+- New API logic (mapping, validation, paging, status codes) gets C# unit tests and in-process
+  integration tests (`WebApplicationFactory`, D14). React components with real logic (pager,
+  form validation, error display) get Vitest tests; pure markup does not need them.
+- Commands and layout entries that stay in use after the phase go into `AGENTS.md` (Commands,
+  Repository layout) in the step that creates them. Phase-only notes stay here.
+
+## Decisions
+- **P2-1 Hosting:** same app, same origin. The ASP.NET Core app serves the built React files from
+  `wwwroot` and the API; one container, no CORS, the antiforgery and session cookies keep working.
+- **P2-2 Source layout:** React source in `src/eShopMvc.Client/` (sibling of `eShopMvc.Web`, so
+  MSBuild and `dotnet watch` never scan `node_modules`). Vite builds into
+  `src/eShopMvc.Web/wwwroot/app/` (`base: '/app/'`), which is git-ignored. `dotnet build` does not
+  run npm; the Dockerfile does (P2-10).
+- **P2-3 Development:** Vite dev server (http://localhost:5173) with a proxy to the ASP.NET Core app
+  (http://localhost:5070) for `/api`, `/items`, `/health`, `/css`, `/lib`, `/images`, `/fonts` and
+  `/favicon.ico`. Without the dev server, `npm run build` and then `dotnet run` serve the built app.
+- **P2-4 Side by side, then cut over:** until the cutover step (step 9) the React UI lives under
+  `/app/` (React Router `basename="/app"`) and the Razor pages stay unchanged, so the existing smoke
+  tests stay green. At the cutover, React takes over the original page routes (P2-9) and the Razor
+  catalog views are deleted.
+- **P2-5 Toolchain and approved npm packages:** Node.js current LTS, pinned to one exact version in
+  `.nvmrc`, `package.json` `engines` and the Dockerfile's Node image tag (record the version here in
+  step 1). Packages: `react`, `react-dom`, `react-router`, `typescript`, `vite`, `@vitejs/plugin-react`,
+  the lint dev dependencies of Vite's `react-ts` template (ESLint and its plugins); for tests `vitest`,
+  `jsdom`, `@testing-library/react`, `@testing-library/user-event`, `@testing-library/jest-dom`; for
+  browser tests `@playwright/test`. Record the exact versions here in the step that adds them.
+- **P2-6 Catalog JSON API** (new; PascalCase per R-7, Problem Details for errors):
+
+  | Method and route | Result | Replaces |
+  |---|---|---|
+  | `GET /api/v1/catalog/items?pageSize=10&pageIndex=0` | 200, `PaginatedItemsViewModel<CatalogItem>` as is; 400 per R-16 | Index |
+  | `GET /api/v1/catalog/items/{id}` | 200 item with `CatalogBrand`, `CatalogType`, `PictureUri`; 404 | Details, Edit, Delete (GET) |
+  | `POST /api/v1/catalog/items` | 201 + `Location`; 400 `ValidationProblemDetails` | Create (POST) |
+  | `PUT /api/v1/catalog/items/{id}` | 204; 400 (validation, or route id ≠ body `Id`); 404 | Edit (POST) |
+  | `DELETE /api/v1/catalog/items/{id}` | 204; 404 (R-15) | Delete (POST) |
+  | `GET /api/v1/catalog/brands`, `GET /api/v1/catalog/types` | 200, lists for the form drop-downs | `ViewBag` select lists |
+
+  - **Overposting:** the body binds to `CatalogItem` (one set of DataAnnotations, same messages), then
+    only the fields in `CatalogController.BindFields` are copied to the stored item; `PictureUri` and
+    the navigation properties are ignored. Unit-tested.
+  - **Validation:** the server is the authority (R-9 picture names, price, stock ranges). The React
+    form shows the server's messages per field; client-side checks only mirror them for quick feedback.
+  - **Logging:** the API actions keep the legacy-style "Now loading..."/"Now processing..." lines.
+- **P2-7 Antiforgery:** kept for all state-changing catalog API calls (the Razor forms had it).
+  Built-in antiforgery with a header token (`X-XSRF-TOKEN`) and a readable `XSRF-TOKEN` cookie issued
+  by the API; validated on `POST`/`PUT`/`DELETE` under `/api/v1/catalog`. Missing or wrong token: 400.
+  Data Protection keys as D-H.
+- **P2-8 Footer (R-11):** a new `GET /api/v1/session` returns the machine name and session start time,
+  starting the session on first call, with the same `M/d/yyyy h:mm:ss tt` (en-US) format. This is the
+  one API endpoint that starts a session (R-11 said API controllers start none). The page shell is a
+  static file, so `SessionStartFilter` no longer sees a page request.
+- **P2-9 Cutover routes:** `/`, `/Catalog`, `/Catalog/Index`, `/Catalog/Details/{id}`,
+  `/Catalog/Create`, `/Catalog/Edit/{id}` and `/Catalog/Delete/{id}` (same query strings, e.g.
+  `?pageSize=…&pageIndex=…`) are served by a SPA fallback to `app/index.html` and matched by React
+  Router. The MVC catalog actions and views are removed; `/items/{id}/pic` and all API routes stay.
+- **P2-10 Container:** the Dockerfile gets a Node build stage (`npm ci`, `npm run build`) before
+  `dotnet publish`, so `MapStaticAssets` includes the built files. The compose build context moves
+  from `./src/eShopMvc.Web` to `./src` (both projects needed). The runtime image stays without Node.
+- **P2-11 Look:** same markup classes and the existing CSS (`wwwroot/css/{custom,base,site}.css`,
+  Bootstrap 4.6.2 CSS, fonts, images), linked from `index.html`, not bundled by Vite. Texts, labels,
+  price and pager formatting copied from the Razor UI, including the preserved quirks (R-24 labels and
+  pager text, R-29 banner fix). jQuery, jQuery Validation and `bootstrap.min.js` are not used by React;
+  remove them with LibMan at the cutover if nothing else needs them.
+- **P2-12 Tests:**
+  - **Smoke tests (xUnit):** new API tests for P2-6/P2-7/P2-8, skipped for `ESHOP_TARGET=legacy`.
+    At the cutover the HTML-scraping Catalog tests and `SuiteFixture`'s clean-up move to the JSON API.
+  - **Browser tests:** Playwright (`@playwright/test`) in `tests/eShopMvc.E2ETests/` (an npm project,
+    not in `eShopMvc.slnx`), using `ESHOP_BASE_URL`, the `smoke-` name prefix and clean-up rules of the
+    smoke tests. Flows: list and paging, details, create (including a validation error), edit, delete,
+    footer. Chromium only unless decided otherwise.
+  - **Component tests:** Vitest + React Testing Library in `src/eShopMvc.Client`.
+
+## Open questions (ask when the step that needs them is reached)
+- **Error page (R-23) after the cutover:** keep `Views/Shared/Error.cshtml` for server-side errors, or
+  replace it with a static page? Also how the React UI shows a failed API call.
+- **Status codes on page URLs:** after the cutover, `/Catalog/Details/999` returns the SPA shell (200)
+  and React shows "not found", where the Razor UI returned 404 (likewise 400 for invalid paging).
+  Accept and document, or check ids on the server before serving the shell?
+- **Legacy in the smoke tests:** after the cutover, keep the HTML Catalog tests for `ESHOP_TARGET=legacy`
+  only, or retire them?
+- **Exact Node version and Playwright browsers** (step 1 and step 7).
+
+## Steps
+1. **Client scaffold:** `src/eShopMvc.Client` from Vite's `react-ts` template, Node pinned, npm scripts
+   (`dev`, `build`, `test`, `lint`), Vite proxy and `outDir` (P2-2, P2-3), `.gitignore` entries
+   (`node_modules`, `wwwroot/app`). No change to the ASP.NET Core app yet.
+2. **Catalog JSON API** (P2-6) with Problem Details and antiforgery (P2-7): C# unit and integration
+   tests, API smoke tests.
+3. **Session endpoint** for the footer (P2-8), with tests.
+4. **Shell and list:** layout (header, banner, footer), CSS reuse (P2-11), Index with paging under `/app/`.
+5. **Details and Delete** pages.
+6. **Create and Edit** forms, with server validation messages and antiforgery.
+7. **Playwright** project and browser tests against `/app/` (P2-12).
+8. **Container:** Node build stage, compose build context (P2-10); smoke and browser tests against
+   the container.
+9. **Cutover:** SPA fallback for the original routes (P2-9), Router `basename` to `/`, Razor catalog
+   views and MVC catalog actions removed, unused client libraries removed, smoke and browser tests
+   moved to the original routes; answer the open questions first.
+10. **Parity:** compare the React UI with the phase-1 Razor UI page by page; record the results and
+    every deliberate difference (with its test) in `docs/parity.md`; update `AGENTS.md` (layout,
+    commands, target stack).
+
+## Progress
+- [ ] Client scaffold
+- [ ] Catalog JSON API
+- [ ] Session endpoint
+- [ ] Shell and list
+- [ ] Details and Delete
+- [ ] Create and Edit
+- [ ] Playwright tests
+- [ ] Container
+- [ ] Cutover
+- [ ] Parity verified
+
+Update this checklist as steps complete.
