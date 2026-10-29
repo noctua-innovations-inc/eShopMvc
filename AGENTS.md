@@ -9,6 +9,7 @@ See "Phases" below.
 eShopMvc/
   legacy/eShopLegacyMVCSolution/   original app – READ-ONLY reference
   src/eShopMvc.Web/                new ASP.NET Core MVC app (.NET 10), http://localhost:5070
+  src/eShopMvc.Client/             React client (Vite, TypeScript; phase 2), builds into src/eShopMvc.Web/wwwroot/app
   tests/eShopMvc.SmokeTests/       HTTP smoke tests, runnable against either app
   tests/eShopMvc.Web.UnitTests/    unit tests for src/eShopMvc.Web (no running app, no database)
   tests/eShopMvc.Web.IntegrationTests/  database tests (own LocalDB test database; see D11)
@@ -61,6 +62,10 @@ eShopMvc/
 | Containers: stop and delete database | `docker compose down -v` (also deletes the Data Protection keys, so forms opened before it fail once; next start migrates and seeds again) |
 | Containers: query the database | `docker compose exec sqlserver bash -c '/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -d eShopMvc.CatalogDb -Q "SELECT COUNT(*) FROM Catalog"'` |
 | Smoke tests vs container | `$env:ESHOP_BASE_URL='http://localhost:5080'; $env:ESHOP_TARGET='new'; dotnet test --project tests/eShopMvc.SmokeTests` |
+| React client: install packages | `cd src/eShopMvc.Client; npm ci` (needs Node 26.13.0 from `.nvmrc`; with fnm: `fnm install 26.13.0`, then `fnm use` in that folder) |
+| React client: dev server (new app must be running) | `cd src/eShopMvc.Client; npm run dev` → http://localhost:5173/app/ (proxies the API, pictures and static files to http://localhost:5070) |
+| React client: build | `cd src/eShopMvc.Client; npm run build` (type check + build into `src/eShopMvc.Web/wwwroot/app`; run before `dotnet build`/`dotnet run` to serve it at http://localhost:5070/app/index.html) |
+| React client: tests, lint | `cd src/eShopMvc.Client; npm test`, `npm run lint` |
 
 The legacy app needs the VS Developer PowerShell (handled by `run-legacy.ps1`)
 and runs in database mode (`UseMockData=false`, LocalDB; see Decisions R-2).

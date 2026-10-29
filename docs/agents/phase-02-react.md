@@ -53,12 +53,22 @@ target for the UI; the smoke tests can still run against it.
   `/app/` (React Router `basename="/app"`) and the Razor pages stay unchanged, so the existing smoke
   tests stay green. At the cutover, React takes over the original page routes (P2-9) and the Razor
   catalog views are deleted.
+  - Found in step 1: the ASP.NET Core app serves `/app/index.html` and `/app/assets/*`, but `/app/`
+    and client routes below it return 404 (no default document or fallback). Step 4 adds a fallback
+    from `/app/{**path}` to `app/index.html`.
 - **P2-5 Toolchain and approved npm packages:** Node.js current LTS, pinned to one exact version in
   `.nvmrc`, `package.json` `engines` and the Dockerfile's Node image tag (record the version here in
   step 1). Packages: `react`, `react-dom`, `react-router`, `typescript`, `vite`, `@vitejs/plugin-react`,
   the lint dev dependencies of Vite's `react-ts` template (ESLint and its plugins); for tests `vitest`,
   `jsdom`, `@testing-library/react`, `@testing-library/user-event`, `@testing-library/jest-dom`; for
   browser tests `@playwright/test`. Record the exact versions here in the step that adds them.
+  - **Step 1** (2026-10-28): Node **26.13.0** (LTS "Lithium"; npm 11.20.0), `engine-strict` in `.npmrc`.
+    Scaffolded from create-vite 9.3.3 `react-ts`, whose linter is now **oxlint** (not ESLint), so oxlint
+    is the approved linter. `@testing-library/dom` is added as the required peer of
+    `@testing-library/react`. Versions: react, react-dom 19.3.1; vite 8.3.5; @vitejs/plugin-react 6.1.2;
+    typescript 7.0.2; oxlint 1.90.0; @types/react, @types/react-dom 19.3.0; @types/node 26.6.6;
+    vitest 5.0.5; jsdom 30.1.3; @testing-library/react 16.3.3, /dom 10.4.2, /jest-dom 7.0.1.
+    Not yet added: react-router, @testing-library/user-event, @playwright/test.
 - **P2-6 Catalog JSON API** (new; PascalCase per R-7, Problem Details for errors):
 
   | Method and route | Result | Replaces |
@@ -136,7 +146,8 @@ target for the UI; the smoke tests can still run against it.
     commands, target stack).
 
 ## Progress
-- [ ] Client scaffold
+- [x] Client scaffold (Node 26.13.0; client build, 1/1 Vitest, lint clean; unit 129/129,
+  integration 64/64, smoke vs new 40/0/4; `/app/index.html` served by the app, Vite proxy checked)
 - [ ] Catalog JSON API
 - [ ] Session endpoint
 - [ ] Shell and list
