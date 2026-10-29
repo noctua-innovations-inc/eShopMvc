@@ -10,13 +10,18 @@ public sealed class AppClient : IDisposable
 {
     private const string BrowserAccept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
 
+    // Decision P2-7 (new app only): GETs under /api/v1/catalog issue this cookie; writes send it back in the header.
+    private const string XsrfCookieName = "XSRF-TOKEN";
+    private const string XsrfHeaderName = "X-XSRF-TOKEN";
+
     private readonly HttpClient http;
+    private readonly CookieContainer cookies = new();
 
     public AppClient()
     {
         var handler = new HttpClientHandler
         {
-            CookieContainer = new CookieContainer(),
+            CookieContainer = cookies,
             UseCookies = true,
             AllowAutoRedirect = false,
         };
@@ -56,6 +61,27 @@ public sealed class AppClient : IDisposable
             Content = new FormUrlEncodedContent(fields),
         };
         request.Headers.TryAddWithoutValidation("Accept", BrowserAccept);
+        return http.SendAsync(request, Token);
+    }
+
+    /// <summary>
+    /// Sends JSON (or no body) with <c>Accept: application/json</c>, the way the React client does: with the
+    /// antiforgery header taken from the <c>XSRF-TOKEN</c> cookie of an earlier GET, unless <paramref name="withXsrfHeader"/> is false.
+    /// </summary>
+    public Task<HttpResponseMessage> SendJsonAsync(HttpMethod method, string url, object? body = null, bool withXsrfHeader = true)
+    {
+        var request = new HttpRequestMessage(method, url);
+        request.Headers.TryAddWithoutValidation("Accept", "application/json");
+        if (body != null)
+        {
+            request.Content = System.Net.Http.Json.JsonContent.Create(body);
+        }
+        if (withXsrfHeader)
+        {
+            var token = cookies.GetCookies(SmokeSettings.BaseUrl)[XsrfCookieName]?.Value
+                ?? throw new InvalidOperationException($"No {XsrfCookieName} cookie yet: GET an /api/v1/catalog URL first.");
+            request.Headers.Add(XsrfHeaderName, Uri.UnescapeDataString(token));
+        }
         return http.SendAsync(request, Token);
     }
 

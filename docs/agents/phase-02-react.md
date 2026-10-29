@@ -86,10 +86,30 @@ target for the UI; the smoke tests can still run against it.
   - **Validation:** the server is the authority (R-9 picture names, price, stock ranges). The React
     form shows the server's messages per field; client-side checks only mirror them for quick feedback.
   - **Logging:** the API actions keep the legacy-style "Now loading..."/"Now processing..." lines.
+  - **Step 2** (`Controllers/WebApi/CatalogApiController.cs`, field copy in `Services/CatalogItemFields.cs`):
+    PUT copies the fields onto the *stored* item and saves that one, because the EF service already
+    tracks it after the 404 lookup (saving a second instance with the same key would throw). A route id
+    that differs from the body `Id` is a plain 400 Problem Details with a `detail`, not a field error
+    (MVC's ModelState keys ignore case, so `Id` would merge into the route's `id`). POST reads the item
+    back, so the 201 body has the brand and type like GET; `Location` is absolute. Attribute validation
+    (`[ApiController]`) runs before the action, so a request with annotation errors doesn't also get
+    P2-13 errors. No global `AddProblemDetails()`: it isn't needed for `[ApiController]` results and
+    would give the Razor pages' empty 400/404 responses a body (R-23).
 - **P2-7 Antiforgery:** kept for all state-changing catalog API calls (the Razor forms had it).
   Built-in antiforgery with a header token (`X-XSRF-TOKEN`) and a readable `XSRF-TOKEN` cookie issued
   by the API; validated on `POST`/`PUT`/`DELETE` under `/api/v1/catalog`. Missing or wrong token: 400.
   Data Protection keys as D-H.
+  - **Step 2:** `AddAntiforgery(HeaderName = "X-XSRF-TOKEN")`; the Razor forms still validate their form
+    field (read when the header is absent; tested). `Infrastructure/AntiforgeryCookieFilter.cs` on the
+    catalog API controller issues `XSRF-TOKEN` (not HttpOnly, `SameSite=Strict`, `Path=/`, `Secure` on
+    HTTPS) with every GET, plus the HttpOnly antiforgery cookie it is paired with;
+    `[AutoValidateAntiforgeryToken]` checks POST, PUT and DELETE. The client must call a GET under
+    `/api/v1/catalog` before its first write (forms load brands/types or the item anyway). The cookie
+    value is URL-encoded by ASP.NET Core; decode it before sending it as the header.
+- **P2-13 Unknown brand or type ids** (step 2, approved 2026-10-29): POST/PUT with a `CatalogBrandId` or
+  `CatalogTypeId` that doesn't exist returns 400 `ValidationProblemDetails` with errors on those fields.
+  The Razor drop-downs never sent one; the services would have thrown (mock) or hit the foreign key
+  (database), both 500. The Razor forms are unchanged.
 - **P2-8 Footer (R-11):** a new `GET /api/v1/session` returns the machine name and session start time,
   starting the session on first call, with the same `M/d/yyyy h:mm:ss tt` (en-US) format. This is the
   one API endpoint that starts a session (R-11 said API controllers start none). The page shell is a
@@ -148,7 +168,8 @@ target for the UI; the smoke tests can still run against it.
 ## Progress
 - [x] Client scaffold (Node 26.13.0; client build, 1/1 Vitest, lint clean; unit 129/129,
   integration 64/64, smoke vs new 40/0/4; `/app/index.html` served by the app, Vite proxy checked)
-- [ ] Catalog JSON API
+- [x] Catalog JSON API (unit 143/143, integration 81/81, smoke vs new 44/0/4 of 48 in database mode;
+  client build, 1/1 Vitest, lint clean)
 - [ ] Session endpoint
 - [ ] Shell and list
 - [ ] Details and Delete

@@ -11,6 +11,10 @@ builder.Services.AddControllersWithViews(options => options.Filters.Add<SessionS
     .AddJsonOptions(options => options.JsonSerializerOptions.PropertyNamingPolicy = null);
 builder.Services.AddCatalogServices(builder.Configuration);
 
+// Decision P2-7: the React client sends the antiforgery token in a header; the Razor forms still post
+// it as a form field (read when the header is absent).
+builder.Services.AddAntiforgery(options => options.HeaderName = AntiforgeryCookieFilter.HeaderName);
+
 // Decision R-11: session for the footer (legacy InProc session + Session_Start, 20-minute idle timeout).
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession();
