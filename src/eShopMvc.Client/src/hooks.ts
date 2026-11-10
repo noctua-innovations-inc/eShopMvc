@@ -43,12 +43,13 @@ export const itemNotFound = 'The catalog item was not found.'
 export const itemNotLoaded = 'The catalog item could not be loaded.'
 
 /**
- * Loads the item of a `:id` route parameter. An id that isn't a number never reaches the server and
- * counts as not found, like an unknown one (the Razor UI answered those with empty 400 and 404 pages).
+ * Loads the item of a `:id` route parameter. The id goes to the server as it is; one that isn't a
+ * number gets a 404 there and counts as not found, like an unknown one (the Razor UI answered those
+ * with empty 400 and 404 pages).
  */
 export function useCatalogItem(idParam: string | undefined): CatalogItemState {
-  const id = idParam !== undefined && /^\d+$/.test(idParam) ? Number(idParam) : null
-  const [result, setResult] = useState<{ id: number; state: CatalogItemState } | null>(null)
+  const id = idParam ?? null
+  const [result, setResult] = useState<{ id: string; state: CatalogItemState } | null>(null)
 
   useEffect(() => {
     if (id === null) {

@@ -33,6 +33,10 @@ target for the UI; the smoke tests can still run against it.
   fallback are built in). Ask as usual if one turns out to be needed.
 - **Routes:** only the changes listed in P2-4 and P2-9.
 - Every deliberate difference from the Razor UI gets a P2 decision here and a test, as in phase 1.
+- Checks by hand that write data (POST/PUT/DELETE with curl or PowerShell) run against a second
+  instance in mock-data mode on another port (`dotnet run --project src/eShopMvc.Web --no-build --
+  --Catalog:UseMockData=true --urls http://localhost:5071`), never against the development database.
+- Every npm package a step installs is named in that step's plan, even if P2-5 already approves it.
 - New API logic (mapping, validation, paging, status codes) gets C# unit tests and in-process
   integration tests (`WebApplicationFactory`, D14). React components with real logic (pager,
   form validation, error display) get Vitest tests; pure markup does not need them.
@@ -145,9 +149,16 @@ target for the UI; the smoke tests can still run against it.
     copied from the HTML the Razor pages render, including Edit's "CatalogBrandId"/"CatalogTypeId"
     labels, R-24), rules and mapping in `catalogItemForm.ts`, `pages/CatalogCreate.tsx`,
     `pages/CatalogEdit.tsx`. The body matches what the Razor forms posted: an empty description is
-    `null`, `OnReorder` is not sent (so an edit resets it to false, as the Razor Edit did), Create sends
-    `dummy.png`. The form has `noValidate` (jQuery validation set it too). All links of the React UI
+    `null`, Create sends `dummy.png` and no `OnReorder` (false; for Edit see P2-17). The form has `noValidate` (jQuery validation set it too). All links of the React UI
     now stay under `/app/`; it no longer links to a Razor page.
+- **P2-17 `OnReorder` survives an edit** (approved 2026-11-10): the React Edit form sends the item's
+  stored `OnReorder` back with the PUT, so editing no longer changes it. The Razor Edit form never
+  posted the field, and its `[Bind]` list included it, so every Razor edit reset it to false (the
+  Razor pages still do until the cutover). No page shows the field. Vitest-tested.
+- **P2-18 Unknown client routes** (step 4; recorded 2026-11-10): a URL under `/app/` that matches no
+  React route (e.g. `/app/Nope`) gets the shell with status 200 and "Page not found." in place of the
+  page content, where the Razor UI returned an empty 404. Whether the server should answer such URLs
+  with a real 404 belongs to the open question on status codes (cutover). Vitest-tested.
 - **P2-9 Cutover routes:** `/`, `/Catalog`, `/Catalog/Index`, `/Catalog/Details/{id}`,
   `/Catalog/Create`, `/Catalog/Edit/{id}` and `/Catalog/Delete/{id}` (same query strings, e.g.
   `?pageSize=…&pageIndex=…`) are served by a SPA fallback to `app/index.html` and matched by React
@@ -168,10 +179,14 @@ target for the UI; the smoke tests can still run against it.
   place of the table: "Invalid paging values." when the API returns 400 (R-16; the Razor UI returned an
   empty 400 page), otherwise "The catalog could not be loaded.". The page URL's `pageSize`/`pageIndex`
   go to the API unchanged, so the server alone decides what is valid. Vitest-tested.
+  While another page of the list loads (pager), the current one stays on screen until the answer
+  arrives, as a browser kept the old Razor page until the new one came.
 - **P2-15 Missing items and failed deletes** (step 5, approved 2026-11-10): the React Details and Delete
   pages show a message and a "Back to List" link in place of the item: "The catalog item was not found."
-  for an unknown id (API 404) and for an id that isn't a number (not sent to the API; the Razor UI
-  returned empty 404 and 400 pages), "The catalog item could not be loaded." for any other failure.
+  for an unknown id and for an id that isn't a number (both API 404; the Razor UI returned empty 404
+  and 400 pages), "The catalog item could not be loaded." for any other failure. The id of the page
+  URL goes to the API unchanged (URL-encoded), so the server alone decides, as with P2-14 (changed
+  2026-11-10; step 5 first checked for digits in the client and skipped the call).
   A failed delete stays on the Delete page with a message above the buttons: "The catalog item was not
   found." on 404 (R-15), otherwise "The catalog item could not be deleted." (includes a rejected
   antiforgery token, 400). This is what React displays; the HTTP status of the page URLs after the

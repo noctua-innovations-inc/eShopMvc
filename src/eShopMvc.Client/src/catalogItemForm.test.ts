@@ -45,7 +45,7 @@ describe('validate', () => {
 })
 
 describe('toInput', () => {
-  it('sends numbers as numbers, an empty description as null and no OnReorder', () => {
+  it('sends numbers as numbers, an empty description as null and no OnReorder of its own', () => {
     const input = toInput(values({ Price: '19.50', AvailableStock: '100', Description: '' }))
 
     expect(input).toEqual({

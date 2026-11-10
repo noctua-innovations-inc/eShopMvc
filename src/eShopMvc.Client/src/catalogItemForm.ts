@@ -93,8 +93,9 @@ export function validate(values: FormValues): FieldErrors {
 }
 
 /**
- * The JSON body for valid values. An empty description is null, as MVC bound the Razor form's empty
- * text box; `OnReorder` is left out (false), as that form never posted it.
+ * The form's part of the JSON body, for valid values. An empty description is null, as MVC bound the
+ * Razor form's empty text box. `OnReorder` isn't a form field: left out here (false for a new item);
+ * the Edit form adds the stored value (P2-17).
  */
 export function toInput(values: FormValues): CatalogItemInput {
   return {

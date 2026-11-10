@@ -60,13 +60,27 @@ describe('Details page', () => {
     expect(screen.queryByRole('link', { name: 'Edit' })).not.toBeInTheDocument()
   })
 
-  it.each(['abc', '5x', '-1', '1.5'])('treats the id "%s" as not found without asking the server', (id) => {
+  it.each([
+    ['abc', 'abc'],
+    ['-1', '-1'],
+    ['1.5', '1.5'],
+    ['5%20x', '5%20x'],
+  ])('lets the server decide about the id "%s": its 404 is "not found"', async (id, sent) => {
     const fetchMock = stubFetch({})
 
     renderApp(`/Catalog/Details/${id}`)
 
-    expect(screen.getByRole('alert')).toHaveTextContent('The catalog item was not found.')
-    expect(requestedUrls(fetchMock).filter((url) => url.startsWith(items))).toEqual([])
+    expect(await screen.findByRole('alert')).toHaveTextContent('The catalog item was not found.')
+    expect(requestedUrls(fetchMock)).toContain(`${items}/${sent}`)
+  })
+
+  it('shows the item the server finds for an id it accepts in another spelling', async () => {
+    stubFetch({ [`${items}/05`]: { status: 200, body: catalogItem({ Id: 5 }) } })
+
+    renderApp('/Catalog/Details/05')
+
+    expect(await screen.findByText('.NET Bot Black Hoodie')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Edit' })).toHaveAttribute('href', '/Catalog/Edit/5')
   })
 
   it('says so when the item cannot be loaded', async () => {

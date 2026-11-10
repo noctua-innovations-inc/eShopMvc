@@ -204,7 +204,31 @@ describe('Edit page', () => {
       AvailableStock: 100,
       RestockThreshold: 0,
       MaxStockThreshold: 0,
+      OnReorder: false,
     })
+  })
+
+  it('sends the stored OnReorder back, so an edit does not reset it (P2-17)', async () => {
+    const onReorder = { ...stored, OnReorder: true }
+    const fetchMock = stubFetch({ ...listRoutes, ...list, [item5]: { status: 200, body: onReorder }, [`PUT ${item5}`]: { status: 204 } })
+
+    renderApp('/Catalog/Edit/5')
+    await userEvent.click(await screen.findByRole('button', { name: '[ Save ]' }))
+
+    await screen.findByText('Listed item')
+    expect(sentRequest(fetchMock, 'PUT').body).toMatchObject({ Id: 5, OnReorder: true })
+  })
+
+  it('sends no OnReorder for a new item', async () => {
+    const fetchMock = stubFetch({ ...listRoutes, ...list, [`POST ${items}`]: { status: 201, body: stored } })
+    const user = userEvent.setup()
+
+    renderApp('/Catalog/Create')
+    await user.type(await screen.findByLabelText('Name'), 'New mug')
+    await user.click(screen.getByRole('button', { name: '[ Create ]' }))
+
+    await screen.findByText('Listed item')
+    expect(sentRequest(fetchMock, 'POST').body).not.toHaveProperty('OnReorder')
   })
 
   it("shows the server's messages at their fields", async () => {

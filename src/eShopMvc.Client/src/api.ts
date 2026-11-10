@@ -52,6 +52,8 @@ export interface CatalogItemInput {
   AvailableStock: number
   RestockThreshold: number
   MaxStockThreshold: number
+  /** Not on the forms; Edit sends the stored value back so that it survives (P2-17). */
+  OnReorder?: boolean
 }
 
 /** `errors` of a 400 `ValidationProblemDetails`: messages by field name. */
@@ -99,9 +101,12 @@ export function getCatalogItems(
   return getJson(`/api/v1/catalog/items${suffix}`, signal)
 }
 
-/** One item with its brand, type and picture URL; 404 as an `ApiError`. */
-export function getCatalogItem(id: number, signal?: AbortSignal): Promise<CatalogItem> {
-  return getJson(`/api/v1/catalog/items/${id}`, signal)
+/**
+ * One item with its brand, type and picture URL; 404 as an `ApiError`. The id is the page URL's,
+ * as it is: the server alone decides whether it is one (P2-15), and answers 404 if not.
+ */
+export function getCatalogItem(id: string, signal?: AbortSignal): Promise<CatalogItem> {
+  return getJson(`/api/v1/catalog/items/${encodeURIComponent(id)}`, signal)
 }
 
 export function getCatalogBrands(signal?: AbortSignal): Promise<CatalogBrand[]> {

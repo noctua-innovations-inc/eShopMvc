@@ -47,7 +47,8 @@ export function CatalogItemForm({ item, brands, types }: Props) {
     setSaving(true)
     try {
       if (item) {
-        await updateCatalogItem(item.Id, toInput(current))
+        // Decision P2-17: OnReorder isn't on the form; the stored value goes back unchanged.
+        await updateCatalogItem(item.Id, { ...toInput(current), OnReorder: item.OnReorder })
       } else {
         await createCatalogItem(toInput(current))
       }
