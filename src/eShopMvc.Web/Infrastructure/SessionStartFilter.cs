@@ -8,7 +8,8 @@ namespace eShopMvc.Web.Infrastructure;
 /// Replaces legacy <c>Session_Start</c> (Decision R-11): on the first MVC request of a session, stores the
 /// machine name and the session start time, which the layout footer prints as "{MachineName}, {SessionStartTime}".
 /// Applies only to <see cref="Controller"/>-based (view) controllers; API controllers get no session, as legacy
-/// Web API had none.
+/// Web API had none. Exception (Decision P2-8): <c>GET /api/v1/session</c> starts it for the React footer through
+/// <see cref="EnsureStarted"/>.
 /// </summary>
 public sealed class SessionStartFilter(TimeProvider timeProvider) : IActionFilter
 {
@@ -28,16 +29,21 @@ public sealed class SessionStartFilter(TimeProvider timeProvider) : IActionFilte
             return;
         }
 
-        var session = context.HttpContext.Session;
+        EnsureStarted(context.HttpContext.Session, timeProvider);
+    }
+
+    public void OnActionExecuted(ActionExecutedContext context)
+    {
+    }
+
+    /// <summary>Stores the machine name and start time unless this session already has them.</summary>
+    public static void EnsureStarted(ISession session, TimeProvider timeProvider)
+    {
         if (session.GetString(MachineNameKey) is null)
         {
             session.SetString(MachineNameKey, Environment.MachineName);
             session.SetString(SessionStartTimeKey, FormatStartTime(timeProvider.GetLocalNow().DateTime));
         }
-    }
-
-    public void OnActionExecuted(ActionExecutedContext context)
-    {
     }
 
     public static string FormatStartTime(DateTime localTime) => localTime.ToString(SessionStartTimeFormat, EnUs);

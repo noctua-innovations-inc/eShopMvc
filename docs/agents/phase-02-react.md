@@ -114,6 +114,12 @@ target for the UI; the smoke tests can still run against it.
   starting the session on first call, with the same `M/d/yyyy h:mm:ss tt` (en-US) format. This is the
   one API endpoint that starts a session (R-11 said API controllers start none). The page shell is a
   static file, so `SessionStartFilter` no longer sees a page request.
+  - **Step 3** (`Controllers/WebApi/SessionApiController.cs`): returns `{"MachineName":…,"SessionStartTime":…}`
+    (`Models/SessionInfo.cs`, PascalCase) with `Cache-Control: no-cache,no-store`. The values are written
+    by `SessionStartFilter.EnsureStarted`, now shared by the filter and the endpoint, so the format is
+    unchanged. Razor pages and the API share one session cookie and show the same values in either order
+    (tested). The endpoint does not issue the `XSRF-TOKEN` cookie (decided 2026-10-29; P2-7 stays limited
+    to `/api/v1/catalog`).
 - **P2-9 Cutover routes:** `/`, `/Catalog`, `/Catalog/Index`, `/Catalog/Details/{id}`,
   `/Catalog/Create`, `/Catalog/Edit/{id}` and `/Catalog/Delete/{id}` (same query strings, e.g.
   `?pageSize=…&pageIndex=…`) are served by a SPA fallback to `app/index.html` and matched by React
@@ -170,7 +176,8 @@ target for the UI; the smoke tests can still run against it.
   integration 64/64, smoke vs new 40/0/4; `/app/index.html` served by the app, Vite proxy checked)
 - [x] Catalog JSON API (unit 143/143, integration 81/81, smoke vs new 44/0/4 of 48 in database mode;
   client build, 1/1 Vitest, lint clean)
-- [ ] Session endpoint
+- [x] Session endpoint (unit 143/143, integration 85/85, smoke vs new 45/0/4 of 49; client build,
+  1/1 Vitest, lint clean)
 - [ ] Shell and list
 - [ ] Details and Delete
 - [ ] Create and Edit
