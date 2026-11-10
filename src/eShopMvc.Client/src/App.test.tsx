@@ -42,7 +42,7 @@ describe('App', () => {
     ])
   })
 
-  it('links each row to its pages (Edit and Create New: the Razor pages until step 6)', async () => {
+  it('links each row to its pages', async () => {
     stubFetch({ [items]: { status: 200, body: page({ Data: [catalogItem({ Id: 7 })] }) } })
 
     renderApp('/')

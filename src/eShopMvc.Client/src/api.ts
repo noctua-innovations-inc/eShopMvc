@@ -40,14 +40,34 @@ export interface SessionInfo {
   SessionStartTime: string
 }
 
+/** The fields the forms send (P2-6: the server copies only these; `Id` only matters for PUT). */
+export interface CatalogItemInput {
+  Id?: number
+  Name: string | null
+  Description: string | null
+  Price: number
+  PictureFileName?: string | null
+  CatalogTypeId: number
+  CatalogBrandId: number
+  AvailableStock: number
+  RestockThreshold: number
+  MaxStockThreshold: number
+}
+
+/** `errors` of a 400 `ValidationProblemDetails`: messages by field name. */
+export type ValidationErrors = Record<string, string[]>
+
 /** A response with a status code other than 2xx. */
 export class ApiError extends Error {
   readonly status: number
+  /** Set when the response was a validation problem. */
+  readonly errors: ValidationErrors | null
 
-  constructor(status: number, url: string) {
+  constructor(status: number, url: string, errors: ValidationErrors | null = null) {
     super(`${url} returned ${status}`)
     this.name = 'ApiError'
     this.status = status
+    this.errors = errors
   }
 }
 
@@ -84,12 +104,50 @@ export function getCatalogItem(id: number, signal?: AbortSignal): Promise<Catalo
   return getJson(`/api/v1/catalog/items/${id}`, signal)
 }
 
+export function getCatalogBrands(signal?: AbortSignal): Promise<CatalogBrand[]> {
+  return getJson('/api/v1/catalog/brands', signal)
+}
+
+export function getCatalogTypes(signal?: AbortSignal): Promise<CatalogType[]> {
+  return getJson('/api/v1/catalog/types', signal)
+}
+
+/** Creates an item; a 400 with field messages as an `ApiError` with `errors`. */
+export function createCatalogItem(item: CatalogItemInput): Promise<void> {
+  return write('POST', '/api/v1/catalog/items', item)
+}
+
+/** Updates an item; 400 as for create, 404 when it no longer exists. */
+export function updateCatalogItem(id: number, item: CatalogItemInput): Promise<void> {
+  return write('PUT', `/api/v1/catalog/items/${id}`, { ...item, Id: id })
+}
+
 /** Deletes an item; 404 (already gone, R-15) and 400 (antiforgery, P2-7) as an `ApiError`. */
-export async function deleteCatalogItem(id: number): Promise<void> {
-  const url = `/api/v1/catalog/items/${id}`
-  const response = await fetch(url, { method: 'DELETE', headers: writeHeaders() })
+export function deleteCatalogItem(id: number): Promise<void> {
+  return write('DELETE', `/api/v1/catalog/items/${id}`)
+}
+
+async function write(method: string, url: string, body?: unknown): Promise<void> {
+  const headers = writeHeaders()
+  if (body !== undefined) {
+    headers['Content-Type'] = 'application/json'
+  }
+  const response = await fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) })
   if (!response.ok) {
-    throw new ApiError(response.status, url)
+    throw new ApiError(response.status, url, await readValidationErrors(response))
+  }
+}
+
+// Only a validation problem has `errors`; other 400s (antiforgery: empty body) and 404s have none.
+async function readValidationErrors(response: Response): Promise<ValidationErrors | null> {
+  if (response.status !== 400) {
+    return null
+  }
+  try {
+    const problem = (await response.json()) as { errors?: ValidationErrors }
+    return problem.errors ?? null
+  } catch {
+    return null
   }
 }
 

@@ -17,10 +17,9 @@ export function CatalogDetails() {
           <>
             <CatalogItemView item={state.item} />
             <p className="esh-link-list esh-link-item--margin">
-              {/* Until step 6 this is the Razor page, outside the React app: a plain link. */}
-              <a className="esh-link-item" href={`/Catalog/Edit/${state.item.Id}`}>
+              <Link className="esh-link-item" to={`/Catalog/Edit/${state.item.Id}`}>
                 Edit
-              </a>
+              </Link>
               {' | '}
               <Link className="esh-link-item" to="/">
                 Back to List

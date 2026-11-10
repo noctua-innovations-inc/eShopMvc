@@ -128,6 +128,26 @@ target for the UI; the smoke tests can still run against it.
     unchanged. Razor pages and the API share one session cookie and show the same values in either order
     (tested). The endpoint does not issue the `XSRF-TOKEN` cookie (decided 2026-10-29; P2-7 stays limited
     to `/api/v1/catalog`).
+- **P2-16 Form validation and failed saves** (step 6, approved 2026-11-10): before sending, the React
+  Create and Edit forms check only what JSON needs, on submit, with the Razor UI's messages: Name
+  present ("The Name field is required."), Price and the three stock fields present and numeric
+  ("The Price field is required.", "The field Price must be a number.", stock fields whole numbers).
+  Every other rule (price range and decimals, stock ranges, picture name R-9, brand/type P2-13) is
+  checked by the server only; its 400 `ValidationProblemDetails` messages are shown at their fields
+  (first message each, `field-validation-error`), others in the validation summary. The Razor UI's
+  jQuery validation showed all of them before posting. A value the server cannot read (key `$.Field`,
+  e.g. a stock beyond `int`) shows MVC's "The value '…' is not valid for {label}." A save that fails
+  otherwise (500, network, rejected antiforgery token) stays on the form with the entered values and
+  "The catalog item could not be saved." in the summary; a PUT answered 404 shows "The catalog item
+  was not found." there. Edit for a missing item: as P2-15. Create shows "The catalog could not be
+  loaded." if the brands or types can't be loaded. Vitest-tested.
+  - **Step 6:** `components/CatalogItemForm.tsx` (both forms; markup, ids, input types and start values
+    copied from the HTML the Razor pages render, including Edit's "CatalogBrandId"/"CatalogTypeId"
+    labels, R-24), rules and mapping in `catalogItemForm.ts`, `pages/CatalogCreate.tsx`,
+    `pages/CatalogEdit.tsx`. The body matches what the Razor forms posted: an empty description is
+    `null`, `OnReorder` is not sent (so an edit resets it to false, as the Razor Edit did), Create sends
+    `dummy.png`. The form has `noValidate` (jQuery validation set it too). All links of the React UI
+    now stay under `/app/`; it no longer links to a Razor page.
 - **P2-9 Cutover routes:** `/`, `/Catalog`, `/Catalog/Index`, `/Catalog/Details/{id}`,
   `/Catalog/Create`, `/Catalog/Edit/{id}` and `/Catalog/Delete/{id}` (same query strings, e.g.
   `?pageSize=…&pageIndex=…`) are served by a SPA fallback to `app/index.html` and matched by React
@@ -172,8 +192,8 @@ target for the UI; the smoke tests can still run against it.
 
 ## Open questions (ask when the step that needs them is reached)
 - **Error page (R-23) after the cutover:** keep `Views/Shared/Error.cshtml` for server-side errors, or
-  replace it with a static page? (Failed API calls: answered by P2-14 for the list and P2-15 for
-  Details and Delete; the forms follow in step 6.)
+  replace it with a static page? (Failed API calls are answered: P2-14 for the list, P2-15 for
+  Details and Delete, P2-16 for the forms.)
 - **Status codes on page URLs:** after the cutover, `/Catalog/Details/999` returns the SPA shell (200)
   and React shows "not found", where the Razor UI returned 404 (likewise 400 for invalid paging).
   Accept and document, or check ids on the server before serving the shell?
@@ -212,7 +232,9 @@ target for the UI; the smoke tests can still run against it.
   16/16 Vitest, lint clean; not yet looked at in a browser)
 - [x] Details and Delete (unit 143/143, integration 93/93, smoke vs new 51/0/4 of 55; client build,
   29/29 Vitest, lint clean; not yet looked at in a browser)
-- [ ] Create and Edit
+- [x] Create and Edit (unit 143/143, integration 93/93, smoke vs new 51/0/4 of 55; client build,
+  70/70 Vitest, lint clean; the forms' POST/PUT/DELETE bodies checked by hand against the running
+  API; not yet looked at in a browser)
 - [ ] Playwright tests
 - [ ] Container
 - [ ] Cutover

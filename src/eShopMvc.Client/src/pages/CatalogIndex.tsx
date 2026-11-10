@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { ApiError, getCatalogItems } from '../api.ts'
 import type { CatalogItem, PaginatedItems } from '../api.ts'
 import { CatalogTable } from '../components/CatalogTable.tsx'
@@ -37,10 +37,9 @@ export function CatalogIndex() {
   return (
     <div className="esh-table">
       <p className="esh-link-wrapper">
-        {/* Until step 6 this is the Razor page, outside the React app: a plain link. */}
-        <a className="btn esh-button esh-button-primary" href="/Catalog/Create">
+        <Link className="btn esh-button esh-button-primary" to="/Catalog/Create">
           Create New
-        </a>
+        </Link>
       </p>
 
       {state.status === 'failed' && <p role="alert">{state.message}</p>}

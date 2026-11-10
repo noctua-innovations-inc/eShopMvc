@@ -37,10 +37,9 @@ export function CatalogTable({ items }: { items: CatalogItem[] }) {
             <td>{item.RestockThreshold}</td>
             <td>{item.MaxStockThreshold}</td>
             <td>
-              {/* Until step 6 this is the Razor page, outside the React app: a plain link. */}
-              <a className="esh-table-link" href={`/Catalog/Edit/${item.Id}`}>
+              <Link className="esh-table-link" to={`/Catalog/Edit/${item.Id}`}>
                 Edit
-              </a>
+              </Link>
               {' | '}
               <Link className="esh-table-link" to={`/Catalog/Details/${item.Id}`}>
                 Details

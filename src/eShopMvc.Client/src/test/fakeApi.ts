@@ -25,7 +25,37 @@ export function requestedUrls(fetchMock: ReturnType<typeof stubFetch>): string[]
   return fetchMock.mock.calls.map(([input]) => String(input))
 }
 
-export const session = { MachineName: 'TESTBOX', SessionStartTime: '10/29/2026 9:05:07 AM' }
+/** The one request sent with `method`: its URL, headers and parsed JSON body. */
+export function sentRequest(fetchMock: ReturnType<typeof stubFetch>, method: string) {
+  const calls = fetchMock.mock.calls.filter(([, init]) => init?.method === method)
+  if (calls.length !== 1) {
+    throw new Error(`Expected one ${method} request, found ${calls.length}.`)
+  }
+  const [input, init] = calls[0]
+  return {
+    url: String(input),
+    headers: init?.headers as Record<string, string>,
+    body: typeof init?.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : undefined,
+  }
+}
+
+export const brands = [
+  { Id: 1, Brand: 'Azure' },
+  { Id: 2, Brand: '.NET' },
+]
+
+export const types = [
+  { Id: 1, Type: 'Mug' },
+  { Id: 2, Type: 'T-Shirt' },
+]
+
+/** The GETs of the forms' drop-downs. */
+export const listRoutes = {
+  '/api/v1/catalog/brands': { status: 200, body: brands },
+  '/api/v1/catalog/types': { status: 200, body: types },
+}
+
+export const session ={ MachineName: 'TESTBOX', SessionStartTime: '10/29/2026 9:05:07 AM' }
 
 export function catalogItem(overrides: Partial<CatalogItem> = {}): CatalogItem {
   return {

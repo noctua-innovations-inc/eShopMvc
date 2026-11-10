@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ApiError, getCatalogItem } from './api.ts'
-import type { CatalogItem } from './api.ts'
+import { ApiError, getCatalogBrands, getCatalogItem, getCatalogTypes } from './api.ts'
+import type { CatalogBrand, CatalogItem, CatalogType } from './api.ts'
 
 /** The Razor layout's title: "{ViewBag.Title} - Catalog manager (MVC)". */
 export function useDocumentTitle(pageTitle: string) {
@@ -9,12 +9,38 @@ export function useDocumentTitle(pageTitle: string) {
   }, [pageTitle])
 }
 
+export type FormListsState =
+  | { status: 'loading' }
+  | { status: 'loaded'; brands: CatalogBrand[]; types: CatalogType[] }
+  | { status: 'failed' }
+
+/** The brands and types of the forms' drop-downs (the Razor views' ViewBag select lists). */
+export function useFormLists(): FormListsState {
+  const [state, setState] = useState<FormListsState>({ status: 'loading' })
+
+  useEffect(() => {
+    const controller = new AbortController()
+    Promise.all([getCatalogBrands(controller.signal), getCatalogTypes(controller.signal)]).then(
+      ([brands, types]) => setState({ status: 'loaded', brands, types }),
+      () => {
+        if (!controller.signal.aborted) {
+          setState({ status: 'failed' })
+        }
+      },
+    )
+    return () => controller.abort()
+  }, [])
+
+  return state
+}
+
 export type CatalogItemState =
   | { status: 'loading' }
   | { status: 'loaded'; item: CatalogItem }
   | { status: 'failed'; message: string }
 
 export const itemNotFound = 'The catalog item was not found.'
+export const itemNotLoaded = 'The catalog item could not be loaded.'
 
 /**
  * Loads the item of a `:id` route parameter. An id that isn't a number never reaches the server and
@@ -34,7 +60,7 @@ export function useCatalogItem(idParam: string | undefined): CatalogItemState {
       (error: unknown) => {
         if (!controller.signal.aborted) {
           const notFound = error instanceof ApiError && error.status === 404
-          const message = notFound ? itemNotFound : 'The catalog item could not be loaded.'
+          const message = notFound ? itemNotFound : itemNotLoaded
           setResult({ id, state: { status: 'failed', message } })
         }
       },
