@@ -11,6 +11,7 @@ eShopMvc/
   src/eShopMvc.Web/                new ASP.NET Core MVC app (.NET 10), http://localhost:5070
   src/eShopMvc.Client/             React client (Vite, TypeScript; phase 2), builds into src/eShopMvc.Web/wwwroot/app
   tests/eShopMvc.SmokeTests/       HTTP smoke tests, runnable against either app
+  tests/eShopMvc.E2ETests/         browser tests of the React UI (Playwright, npm project; not in eShopMvc.slnx)
   tests/eShopMvc.Web.UnitTests/    unit tests for src/eShopMvc.Web (no running app, no database)
   tests/eShopMvc.Web.IntegrationTests/  database tests (own LocalDB test database; see D11)
   docs/                            assessment.md (step 1), parity.md (step 9)
@@ -66,6 +67,9 @@ eShopMvc/
 | React client: dev server (new app must be running) | `cd src/eShopMvc.Client; npm run dev` → http://localhost:5173/app/ (proxies the API, pictures and static files to http://localhost:5070) |
 | React client: build | `cd src/eShopMvc.Client; npm run build` (type check + build into `src/eShopMvc.Web/wwwroot/app`; run before `dotnet build`/`dotnet run` to serve it at http://localhost:5070/app/) |
 | React client: tests, lint | `cd src/eShopMvc.Client; npm test`, `npm run lint` |
+| Browser tests: first-time setup | `cd tests/eShopMvc.E2ETests; npm ci; npx playwright install chromium` (same Node as the client; the browser goes to the user profile's `ms-playwright` cache) |
+| Browser tests (new app must be running, React client built first) | `cd tests/eShopMvc.E2ETests; npm test` (uses `ESHOP_BASE_URL`, default http://localhost:5070; one file: `npm test -- tests/list.spec.ts`) |
+| Browser tests: type check, failure details | `cd tests/eShopMvc.E2ETests; npm run typecheck`; after a failure `npx playwright show-trace test-results/<test>/trace.zip` |
 
 The legacy app needs the VS Developer PowerShell (handled by `run-legacy.ps1`)
 and runs in database mode (`UseMockData=false`, LocalDB; see Decisions R-2).
@@ -84,7 +88,10 @@ Smoke tests (`tests/eShopMvc.SmokeTests`, xUnit v3) call a running app over HTTP
 their own `smoke-*` items and never modify seeded data. `global.json` opts `dotnet test` into
 Microsoft.Testing.Platform (required by xUnit v3 on the .NET 10 SDK). Any new test project must use a framework that supports it (e.g. xUnit v3).
 In MTP mode `dotnet test` takes no path argument; pass `--project <dir or .csproj>` (as above).
-Add every new project to `eShopMvc.slnx` (`dotnet sln eShopMvc.slnx add <path>`); there is no
+Browser tests (`tests/eShopMvc.E2ETests`, Playwright, Chromium) drive the React UI of a running new app.
+They create and delete their own `smoke-e2e-*` items (through the UI or the JSON API) and never modify
+seeded data; one worker, because the paging tests read totals that other tests change.
+Add every new .NET project to `eShopMvc.slnx` (`dotnet sln eShopMvc.slnx add <path>`); there is no
 separate tests solution. Plain `dotnet test` at the root would also run the smoke tests, which
 need a running app.
 

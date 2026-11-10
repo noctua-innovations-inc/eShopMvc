@@ -79,8 +79,11 @@ target for the UI; the smoke tests can still run against it.
     typescript 7.0.2; oxlint 1.90.0; @types/react, @types/react-dom 19.3.0; @types/node 26.6.6;
     vitest 5.0.5; jsdom 30.1.3; @testing-library/react 16.3.3, /dom 10.4.2, /jest-dom 7.0.1.
     Not yet added: react-router, @testing-library/user-event, @playwright/test.
-  - **Step 4** (2026-11-10): react-router 8.5.1; @testing-library/user-event 14.6.9. Not yet added:
-    @playwright/test.
+  - **Step 4** (2026-11-10): react-router 8.5.1; @testing-library/user-event 14.6.9.
+  - **Step 7** (2026-11-10), in `tests/eShopMvc.E2ETests` (its own `package.json`, same Node pin):
+    @playwright/test 1.65.0; typescript 7.0.2 and @types/node 26.6.6 for `npm run typecheck` (approved
+    for this second project 2026-11-10). Browser: Chromium only, installed with
+    `npx playwright install chromium`.
 - **P2-6 Catalog JSON API** (new; PascalCase per R-7, Problem Details for errors):
 
   | Method and route | Result | Replaces |
@@ -204,6 +207,24 @@ target for the UI; the smoke tests can still run against it.
     smoke tests. Flows: list and paging, details, create (including a validation error), edit, delete,
     footer. Chromium only unless decided otherwise.
   - **Component tests:** Vitest + React Testing Library in `src/eShopMvc.Client`.
+  - **Step 7:** 26 browser tests in `tests/` (`list`, `details`, `create`, `edit`, `delete`, `shell` with
+    the footer), helpers in `support/`. The app must be running (Playwright starts nothing);
+    `ESHOP_BASE_URL` defaults to http://localhost:5070, not the smoke tests' legacy default. The `/app`
+    prefix is the constant `appBasePath` in `support/app.ts`: set it to `''` at the cutover. Items are
+    named `smoke-e2e-*` (the smoke suite sweeps `smoke-*`, so either suite cleans up after the other);
+    `support/globalSetup.ts` checks the app is reachable and removes leftovers; the `item` and `newName`
+    fixtures delete what a test created. Edit and Delete tests create their item through the API.
+    One worker. Not covered in a browser: failed saves and loads (500, rejected token), which need a
+    faulty server; Vitest covers them.
+  - **Found by step 7:** links to the list made inside the app lead to `/app` (React Router drops the
+    trailing slash of the basename), a direct visit uses `/app/`; the server answers both with the
+    shell, and the difference disappears at the cutover (`/`). Two whitespace differences from the
+    Razor markup moved the banner heading 4.4px left and "Next" 0.7px right; `Layout.tsx` and
+    `Pager.tsx` now carry the same spaces. After that, a one-off script compared every rendered element
+    (tag, classes, box to 0.1px, text, colors, font, field values) of the list (two paging states),
+    Details, Delete, Edit and Create with the Razor pages at widths 1280, 1920, 800 and 400: no
+    difference, except the empty `<div>` at the end of the Razor Create view, which renders nothing
+    and is not copied. Error states and the validation messages were not part of that comparison.
 
 ## Open questions (ask when the step that needs them is reached)
 - **Error page (R-23) after the cutover:** keep `Views/Shared/Error.cshtml` for server-side errors, or
@@ -214,7 +235,7 @@ target for the UI; the smoke tests can still run against it.
   Accept and document, or check ids on the server before serving the shell?
 - **Legacy in the smoke tests:** after the cutover, keep the HTML Catalog tests for `ESHOP_TARGET=legacy`
   only, or retire them?
-- **Exact Node version and Playwright browsers** (step 1 and step 7).
+- ~~Exact Node version and Playwright browsers~~: answered (Node 26.13.0, step 1; Chromium only, step 7).
 
 ## Steps
 1. **Client scaffold:** `src/eShopMvc.Client` from Vite's `react-ts` template, Node pinned, npm scripts
@@ -250,7 +271,9 @@ target for the UI; the smoke tests can still run against it.
 - [x] Create and Edit (unit 143/143, integration 93/93, smoke vs new 51/0/4 of 55; client build,
   70/70 Vitest, lint clean; the forms' POST/PUT/DELETE bodies checked by hand against the running
   API; not yet looked at in a browser)
-- [ ] Playwright tests
+- [x] Playwright tests (browser 26/26 in Chromium; unit 143/143, integration 93/93, smoke vs new
+  51/0/4 of 55; client build, 73/73 Vitest, lint clean; React pages match the Razor pages element
+  for element at four widths)
 - [ ] Container
 - [ ] Cutover
 - [ ] Parity verified

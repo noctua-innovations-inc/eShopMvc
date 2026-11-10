@@ -17,8 +17,9 @@ export function Pager({ page }: { page: PageInfo }) {
             <Link className={pagerLinkClass(hasPrevious)} to={pageUrl(page.ItemsPerPage, page.ActualPage - 1)}>
               Previous
             </Link>{' '}
+            {/* One text node, with the spaces the Razor markup's line breaks left inside the span: they set the gap before "Next". */}
             <span className="esh-pager-item">
-              Showing {page.ItemsPerPage} of {page.TotalItems} products - Page {page.ActualPage + 1} - {page.TotalPages}
+              {` Showing ${page.ItemsPerPage} of ${page.TotalItems} products - Page ${page.ActualPage + 1} - ${page.TotalPages} `}
             </span>{' '}
             <Link className={pagerLinkClass(hasNext)} to={pageUrl(page.ItemsPerPage, page.ActualPage + 1)}>
               Next

@@ -15,6 +15,7 @@ export function Layout() {
       </header>
       <section className="esh-app-hero">
         <div className="container esh-header">
+          {/* The Razor markup's line break before the heading renders as a space; without it the heading sits 4px further left. */}{' '}
           <h1 className="esh-header-title">
             Catalog manager <span>(MVC)</span>
           </h1>
