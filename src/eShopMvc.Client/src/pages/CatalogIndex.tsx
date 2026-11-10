@@ -4,6 +4,7 @@ import { ApiError, getCatalogItems } from '../api.ts'
 import type { CatalogItem, PaginatedItems } from '../api.ts'
 import { CatalogTable } from '../components/CatalogTable.tsx'
 import { Pager } from '../components/Pager.tsx'
+import { useDocumentTitle } from '../hooks.ts'
 
 type State =
   | { status: 'loading' }
@@ -17,9 +18,7 @@ export function CatalogIndex() {
   const pageIndex = searchParams.get('pageIndex')
   const [state, setState] = useState<State>({ status: 'loading' })
 
-  useEffect(() => {
-    document.title = 'Index - Catalog manager (MVC)'
-  }, [])
+  useDocumentTitle('Index')
 
   // The previous page stays on screen until the next one has arrived.
   useEffect(() => {

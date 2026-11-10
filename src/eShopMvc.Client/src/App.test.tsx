@@ -42,7 +42,7 @@ describe('App', () => {
     ])
   })
 
-  it('links to the Razor pages until the React ones exist', async () => {
+  it('links each row to its pages (Edit and Create New: the Razor pages until step 6)', async () => {
     stubFetch({ [items]: { status: 200, body: page({ Data: [catalogItem({ Id: 7 })] }) } })
 
     renderApp('/')
@@ -51,6 +51,19 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'Details' })).toHaveAttribute('href', '/Catalog/Details/7')
     expect(screen.getByRole('link', { name: 'Delete' })).toHaveAttribute('href', '/Catalog/Delete/7')
     expect(screen.getByRole('link', { name: 'Create New' })).toHaveAttribute('href', '/Catalog/Create')
+  })
+
+  it('opens the details page from the list without leaving the app', async () => {
+    stubFetch({
+      [items]: { status: 200, body: page({ Data: [catalogItem({ Id: 7 })] }) },
+      [`${items}/7`]: { status: 200, body: catalogItem({ Id: 7 }) },
+    })
+
+    renderApp('/')
+    await userEvent.click(await screen.findByRole('link', { name: 'Details' }))
+
+    expect(await screen.findByRole('heading', { level: 2 })).toHaveTextContent('Details')
+    expect(await screen.findByText('.NET Bot Black Hoodie')).toBeInTheDocument()
   })
 
   it('formats prices as en-US currency with thousands separators', async () => {

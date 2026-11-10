@@ -4,12 +4,14 @@ import type { CatalogItem, PaginatedItems } from '../api.ts'
 type Reply = { status: number; body?: unknown }
 
 /**
- * Replaces `fetch` for one test: `routes` maps a URL (path and query) to its reply; any other URL
- * gets a 404. Returns the mock, so tests can assert on the requested URLs.
+ * Replaces `fetch` for one test: `routes` maps a URL (path and query; other methods than GET as
+ * "DELETE /url") to its reply; anything else gets a 404. Returns the mock, so tests can assert on
+ * the requests.
  */
 export function stubFetch(routes: Record<string, Reply>) {
-  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-    const reply = routes[String(input)] ?? { status: 404 }
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const method = init?.method ?? 'GET'
+    const reply = routes[method === 'GET' ? String(input) : `${method} ${String(input)}`] ?? { status: 404 }
     return new Response(reply.body === undefined ? null : JSON.stringify(reply.body), {
       status: reply.status,
       headers: { 'Content-Type': 'application/json' },

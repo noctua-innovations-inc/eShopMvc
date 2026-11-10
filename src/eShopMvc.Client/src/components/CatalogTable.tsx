@@ -1,3 +1,4 @@
+import { Link } from 'react-router'
 import type { CatalogItem } from '../api.ts'
 import { formatPrice } from '../format.ts'
 
@@ -36,18 +37,18 @@ export function CatalogTable({ items }: { items: CatalogItem[] }) {
             <td>{item.RestockThreshold}</td>
             <td>{item.MaxStockThreshold}</td>
             <td>
-              {/* Until steps 5 and 6 these are the Razor pages, outside the React app: plain links. */}
+              {/* Until step 6 this is the Razor page, outside the React app: a plain link. */}
               <a className="esh-table-link" href={`/Catalog/Edit/${item.Id}`}>
                 Edit
               </a>
               {' | '}
-              <a className="esh-table-link" href={`/Catalog/Details/${item.Id}`}>
+              <Link className="esh-table-link" to={`/Catalog/Details/${item.Id}`}>
                 Details
-              </a>
+              </Link>
               {' | '}
-              <a className="esh-table-link" href={`/Catalog/Delete/${item.Id}`}>
+              <Link className="esh-table-link" to={`/Catalog/Delete/${item.Id}`}>
                 Delete
-              </a>
+              </Link>
             </td>
           </tr>
         ))}

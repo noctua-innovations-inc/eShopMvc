@@ -79,6 +79,32 @@ export function getCatalogItems(
   return getJson(`/api/v1/catalog/items${suffix}`, signal)
 }
 
+/** One item with its brand, type and picture URL; 404 as an `ApiError`. */
+export function getCatalogItem(id: number, signal?: AbortSignal): Promise<CatalogItem> {
+  return getJson(`/api/v1/catalog/items/${id}`, signal)
+}
+
+/** Deletes an item; 404 (already gone, R-15) and 400 (antiforgery, P2-7) as an `ApiError`. */
+export async function deleteCatalogItem(id: number): Promise<void> {
+  const url = `/api/v1/catalog/items/${id}`
+  const response = await fetch(url, { method: 'DELETE', headers: writeHeaders() })
+  if (!response.ok) {
+    throw new ApiError(response.status, url)
+  }
+}
+
+// Decision P2-7: every GET under /api/v1/catalog issues the XSRF-TOKEN cookie (URL-encoded by
+// ASP.NET Core); writes send its value back in the X-XSRF-TOKEN header. Without the cookie the header
+// is left out and the server answers 400.
+function writeHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { Accept: 'application/json' }
+  const cookie = document.cookie.split('; ').find((c) => c.startsWith('XSRF-TOKEN='))
+  if (cookie) {
+    headers['X-XSRF-TOKEN'] = decodeURIComponent(cookie.slice('XSRF-TOKEN='.length))
+  }
+  return headers
+}
+
 /** The footer values; the first call starts the session (P2-8). */
 export function getSession(signal?: AbortSignal): Promise<SessionInfo> {
   return getJson('/api/v1/session', signal)

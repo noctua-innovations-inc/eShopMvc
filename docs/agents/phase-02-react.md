@@ -148,6 +148,19 @@ target for the UI; the smoke tests can still run against it.
   place of the table: "Invalid paging values." when the API returns 400 (R-16; the Razor UI returned an
   empty 400 page), otherwise "The catalog could not be loaded.". The page URL's `pageSize`/`pageIndex`
   go to the API unchanged, so the server alone decides what is valid. Vitest-tested.
+- **P2-15 Missing items and failed deletes** (step 5, approved 2026-11-10): the React Details and Delete
+  pages show a message and a "Back to List" link in place of the item: "The catalog item was not found."
+  for an unknown id (API 404) and for an id that isn't a number (not sent to the API; the Razor UI
+  returned empty 404 and 400 pages), "The catalog item could not be loaded." for any other failure.
+  A failed delete stays on the Delete page with a message above the buttons: "The catalog item was not
+  found." on 404 (R-15), otherwise "The catalog item could not be deleted." (includes a rejected
+  antiforgery token, 400). This is what React displays; the HTTP status of the page URLs after the
+  cutover is still an open question. Vitest-tested.
+  - **Step 5:** `pages/CatalogDetails.tsx`, `pages/CatalogDelete.tsx`, shared `components/CatalogItemView.tsx`
+    and `hooks.ts` (`useCatalogItem`, `useDocumentTitle`). Delete sends `DELETE /api/v1/catalog/items/{id}`
+    with `X-XSRF-TOKEN` from the decoded `XSRF-TOKEN` cookie (issued by the item's GET, P2-7), disables
+    the button meanwhile and then shows the list. The list's "Details" and "Delete" are Router links
+    now; "Edit" (list and Details page) and "Create New" stay Razor links until step 6.
 - **P2-12 Tests:**
   - **Smoke tests (xUnit):** new API tests for P2-6/P2-7/P2-8, skipped for `ESHOP_TARGET=legacy`.
     At the cutover the HTML-scraping Catalog tests and `SuiteFixture`'s clean-up move to the JSON API.
@@ -159,8 +172,8 @@ target for the UI; the smoke tests can still run against it.
 
 ## Open questions (ask when the step that needs them is reached)
 - **Error page (R-23) after the cutover:** keep `Views/Shared/Error.cshtml` for server-side errors, or
-  replace it with a static page? (Failed API calls in the list: answered by P2-14; the forms follow in
-  steps 5 and 6.)
+  replace it with a static page? (Failed API calls: answered by P2-14 for the list and P2-15 for
+  Details and Delete; the forms follow in step 6.)
 - **Status codes on page URLs:** after the cutover, `/Catalog/Details/999` returns the SPA shell (200)
   and React shows "not found", where the Razor UI returned 404 (likewise 400 for invalid paging).
   Accept and document, or check ids on the server before serving the shell?
@@ -197,7 +210,8 @@ target for the UI; the smoke tests can still run against it.
   1/1 Vitest, lint clean)
 - [x] Shell and list (unit 143/143, integration 93/93, smoke vs new 51/0/4 of 55; client build,
   16/16 Vitest, lint clean; not yet looked at in a browser)
-- [ ] Details and Delete
+- [x] Details and Delete (unit 143/143, integration 93/93, smoke vs new 51/0/4 of 55; client build,
+  29/29 Vitest, lint clean; not yet looked at in a browser)
 - [ ] Create and Edit
 - [ ] Playwright tests
 - [ ] Container
