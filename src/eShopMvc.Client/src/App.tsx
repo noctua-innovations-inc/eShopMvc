@@ -1,10 +1,19 @@
-// Placeholder until step 4 (shell and list) of docs/agents/phase-02-react.md.
+import { Route, Routes } from 'react-router'
+import { Layout } from './components/Layout.tsx'
+import { CatalogIndex } from './pages/CatalogIndex.tsx'
+
+// The routes of the Razor UI (default route {controller=Catalog}/{action=Index}/{id?}), relative to
+// the Router's basename (Decision P2-4: /app until the cutover).
 function App() {
   return (
-    <main>
-      <h1>Catalog manager (React)</h1>
-      <p>Work in progress: the catalog pages are still served by the Razor UI.</p>
-    </main>
+    <Routes>
+      <Route element={<Layout />}>
+        <Route index element={<CatalogIndex />} />
+        <Route path="Catalog" element={<CatalogIndex />} />
+        <Route path="Catalog/Index" element={<CatalogIndex />} />
+        <Route path="*" element={<p role="alert">Page not found.</p>} />
+      </Route>
+    </Routes>
   )
 }
 

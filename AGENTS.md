@@ -54,7 +54,7 @@ eShopMvc/
 | Health checks (app running) | `curl http://localhost:5070/health/live` (no dependencies), `curl http://localhost:5070/health/ready` (database in database mode); `Healthy` 200 or `Unhealthy` 503 |
 | Show EF Core SQL commands | `$env:Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command='Information'; dotnet run --project src/eShopMvc.Web` |
 | Smoke tests vs legacy (app must be running) | `$env:ESHOP_BASE_URL='http://localhost:5050'; $env:ESHOP_TARGET='legacy'; dotnet test --project tests/eShopMvc.SmokeTests` (set both explicitly: `$env:` values from a new-app run stay set in the same session) |
-| Smoke tests vs new app (app must be running) | `$env:ESHOP_BASE_URL='http://localhost:5070'; $env:ESHOP_TARGET='new'; dotnet test --project tests/eShopMvc.SmokeTests` |
+| Smoke tests vs new app (app must be running, React client built first) | `$env:ESHOP_BASE_URL='http://localhost:5070'; $env:ESHOP_TARGET='new'; dotnet test --project tests/eShopMvc.SmokeTests` |
 | Containers: first-time setup | `Copy-Item .env.example .env`, then set `MSSQL_SA_PASSWORD` in `.env` (never commit `.env`) |
 | Containers: build and start | `docker compose up -d --build` → http://localhost:5080; `docker compose ps` shows both services `healthy` |
 | Containers: logs | `docker compose logs -f web` (JSON, Production) |
@@ -64,7 +64,7 @@ eShopMvc/
 | Smoke tests vs container | `$env:ESHOP_BASE_URL='http://localhost:5080'; $env:ESHOP_TARGET='new'; dotnet test --project tests/eShopMvc.SmokeTests` |
 | React client: install packages | `cd src/eShopMvc.Client; npm ci` (needs Node 26.13.0 from `.nvmrc`; with fnm: `fnm install 26.13.0`, then `fnm use` in that folder) |
 | React client: dev server (new app must be running) | `cd src/eShopMvc.Client; npm run dev` → http://localhost:5173/app/ (proxies the API, pictures and static files to http://localhost:5070) |
-| React client: build | `cd src/eShopMvc.Client; npm run build` (type check + build into `src/eShopMvc.Web/wwwroot/app`; run before `dotnet build`/`dotnet run` to serve it at http://localhost:5070/app/index.html) |
+| React client: build | `cd src/eShopMvc.Client; npm run build` (type check + build into `src/eShopMvc.Web/wwwroot/app`; run before `dotnet build`/`dotnet run` to serve it at http://localhost:5070/app/) |
 | React client: tests, lint | `cd src/eShopMvc.Client; npm test`, `npm run lint` |
 
 The legacy app needs the VS Developer PowerShell (handled by `run-legacy.ps1`)

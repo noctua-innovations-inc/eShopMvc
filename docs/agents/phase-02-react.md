@@ -56,6 +56,12 @@ target for the UI; the smoke tests can still run against it.
   - Found in step 1: the ASP.NET Core app serves `/app/index.html` and `/app/assets/*`, but `/app/`
     and client routes below it return 404 (no default document or fallback). Step 4 adds a fallback
     from `/app/{**path}` to `app/index.html`.
+  - **Step 4:** `MapFallbackToFile("/app/{**path:nonfile}", "app/index.html")` in `Program.cs`; `:nonfile`
+    keeps a missing `/app/assets/*` file a 404. The Router's `basename` comes from Vite's `base`
+    (`import.meta.env.BASE_URL`), so the cutover changes one setting. `/`, `/Catalog` and `/Catalog/Index`
+    show the list; any other client route shows "Page not found." in the shell until its page exists.
+    Until steps 5 and 6, "Create New", "Edit", "Details" and "Delete" are plain links to the Razor pages
+    (approved 2026-11-10), which return to the Razor list after saving.
 - **P2-5 Toolchain and approved npm packages:** Node.js current LTS, pinned to one exact version in
   `.nvmrc`, `package.json` `engines` and the Dockerfile's Node image tag (record the version here in
   step 1). Packages: `react`, `react-dom`, `react-router`, `typescript`, `vite`, `@vitejs/plugin-react`,
@@ -69,6 +75,8 @@ target for the UI; the smoke tests can still run against it.
     typescript 7.0.2; oxlint 1.90.0; @types/react, @types/react-dom 19.3.0; @types/node 26.6.6;
     vitest 5.0.5; jsdom 30.1.3; @testing-library/react 16.3.3, /dom 10.4.2, /jest-dom 7.0.1.
     Not yet added: react-router, @testing-library/user-event, @playwright/test.
+  - **Step 4** (2026-11-10): react-router 8.5.1; @testing-library/user-event 14.6.9. Not yet added:
+    @playwright/test.
 - **P2-6 Catalog JSON API** (new; PascalCase per R-7, Problem Details for errors):
 
   | Method and route | Result | Replaces |
@@ -132,6 +140,14 @@ target for the UI; the smoke tests can still run against it.
   price and pager formatting copied from the Razor UI, including the preserved quirks (R-24 labels and
   pager text, R-29 banner fix). jQuery, jQuery Validation and `bootstrap.min.js` are not used by React;
   remove them with LibMan at the cutover if nothing else needs them.
+  - **Step 4:** the four style sheets are linked in the client's `index.html` by absolute path with
+    `vite-ignore` (Vite leaves them alone). The banner and title keep "Catalog manager (MVC)"; the list
+    sets the title "Index - Catalog manager (MVC)" (approved 2026-11-10). Prices use
+    `Intl.NumberFormat('en-US', USD)` whatever the browser language (R-12).
+- **P2-14 Failed API calls in the list** (step 4, approved 2026-11-10): the React list shows a message in
+  place of the table: "Invalid paging values." when the API returns 400 (R-16; the Razor UI returned an
+  empty 400 page), otherwise "The catalog could not be loaded.". The page URL's `pageSize`/`pageIndex`
+  go to the API unchanged, so the server alone decides what is valid. Vitest-tested.
 - **P2-12 Tests:**
   - **Smoke tests (xUnit):** new API tests for P2-6/P2-7/P2-8, skipped for `ESHOP_TARGET=legacy`.
     At the cutover the HTML-scraping Catalog tests and `SuiteFixture`'s clean-up move to the JSON API.
@@ -143,7 +159,8 @@ target for the UI; the smoke tests can still run against it.
 
 ## Open questions (ask when the step that needs them is reached)
 - **Error page (R-23) after the cutover:** keep `Views/Shared/Error.cshtml` for server-side errors, or
-  replace it with a static page? Also how the React UI shows a failed API call.
+  replace it with a static page? (Failed API calls in the list: answered by P2-14; the forms follow in
+  steps 5 and 6.)
 - **Status codes on page URLs:** after the cutover, `/Catalog/Details/999` returns the SPA shell (200)
   and React shows "not found", where the Razor UI returned 404 (likewise 400 for invalid paging).
   Accept and document, or check ids on the server before serving the shell?
@@ -178,7 +195,8 @@ target for the UI; the smoke tests can still run against it.
   client build, 1/1 Vitest, lint clean)
 - [x] Session endpoint (unit 143/143, integration 85/85, smoke vs new 45/0/4 of 49; client build,
   1/1 Vitest, lint clean)
-- [ ] Shell and list
+- [x] Shell and list (unit 143/143, integration 93/93, smoke vs new 51/0/4 of 55; client build,
+  16/16 Vitest, lint clean; not yet looked at in a browser)
 - [ ] Details and Delete
 - [ ] Create and Edit
 - [ ] Playwright tests

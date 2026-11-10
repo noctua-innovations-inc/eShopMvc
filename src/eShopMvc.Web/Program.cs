@@ -68,6 +68,10 @@ app.MapControllerRoute(
     pattern: "{controller=Catalog}/{action=Index}/{id?}")
     .WithStaticAssets();
 
+// Decision P2-4: until the cutover the React UI lives under /app/; its client-side routes get the shell.
+// ":nonfile" keeps a missing /app/assets/* file a 404.
+app.MapFallbackToFile("/app/{**path:nonfile}", "app/index.html");
+
 app.MapCatalogHealthChecks();
 
 app.Run();
