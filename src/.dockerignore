@@ -1,0 +1,10 @@
+# For the build context src/ (docker-compose.yml, Decision P2-10).
+**/bin/
+**/obj/
+**/*.user
+**/node_modules/
+# A client build from the local disk: the image builds its own.
+eShopMvc.Web/wwwroot/app/
+eShopMvc.Web/Properties/launchSettings.json
+eShopMvc.Web/Dockerfile
+.dockerignore

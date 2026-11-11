@@ -1,6 +1,0 @@
-bin/
-obj/
-*.user
-Properties/launchSettings.json
-Dockerfile
-.dockerignore

@@ -169,6 +169,15 @@ target for the UI; the smoke tests can still run against it.
 - **P2-10 Container:** the Dockerfile gets a Node build stage (`npm ci`, `npm run build`) before
   `dotnet publish`, so `MapStaticAssets` includes the built files. The compose build context moves
   from `./src/eShopMvc.Web` to `./src` (both projects needed). The runtime image stays without Node.
+  - **Step 8** (2026-11-10): first stage `node:26.13.0-bookworm-slim` (Debian, glibc; the tag carries
+    the Node version of P2-5, so a Node update changes `.nvmrc`, `engines` and this tag together). It
+    runs only `npm ci` and `npm run build` (type check and Vite build); Vitest and lint stay local
+    checks. The stage works in `/src/eShopMvc.Client`, so Vite's `outDir` needs no container setting;
+    the .NET stage copies the output into `wwwroot/app` before `dotnet publish`. `.dockerignore` moved
+    from `src/eShopMvc.Web/` to `src/` (Docker reads it from the context root) and also excludes
+    `node_modules` and a locally built `wwwroot/app`, so the image never contains a client build from
+    the developer's disk. Checked in the running container: `wwwroot/app` has `index.html` and the
+    script (with `.br`/`.gz`), no `node` or `npm`, no client sources; image 462 MB.
 - **P2-11 Look:** same markup classes and the existing CSS (`wwwroot/css/{custom,base,site}.css`,
   Bootstrap 4.6.2 CSS, fonts, images), linked from `index.html`, not bundled by Vite. Texts, labels,
   price and pager formatting copied from the Razor UI, including the preserved quirks (R-24 labels and
@@ -274,7 +283,9 @@ target for the UI; the smoke tests can still run against it.
 - [x] Playwright tests (browser 26/26 in Chromium; unit 143/143, integration 93/93, smoke vs new
   51/0/4 of 55; client build, 73/73 Vitest, lint clean; React pages match the Razor pages element
   for element at four widths)
-- [ ] Container
+- [x] Container (image built by `docker compose up -d --build`, both services healthy; against
+  http://localhost:5080: smoke 51/0/4 of 55, browser 26/26; unit 143/143, integration 93/93; client
+  unchanged, so Vitest and lint not rerun)
 - [ ] Cutover
 - [ ] Parity verified
 

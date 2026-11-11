@@ -23,7 +23,9 @@ services:
 
   web:
     build:
-      context: ./src/eShopMvc.Web
+      # Decision P2-10: the image builds the React client too, so the context holds both projects.
+      context: ./src
+      dockerfile: eShopMvc.Web/Dockerfile
     image: eshopmvc-web:local
     # Decision D-E: readable machine name in the footer (R-11) instead of the container ID.
     hostname: eshopmvc-web

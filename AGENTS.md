@@ -22,7 +22,8 @@ eShopMvc/
   run-legacy.ps1                   builds and runs the legacy app
   docker-compose.yml               new app + SQL Server 2022 on Linux (step 10), http://localhost:5080
   .env.example                     template for .env (git-ignored): MSSQL_SA_PASSWORD, optional TZ
-  src/eShopMvc.Web/Dockerfile      multi-stage Linux image (build context: src/eShopMvc.Web)
+  src/eShopMvc.Web/Dockerfile      multi-stage Linux image, builds the React client too (build context: src/)
+  src/.dockerignore                for that build context
   AGENTS.md                        this file
   CLAUDE.md                        imports this file for Claude Code
 ```
@@ -57,7 +58,7 @@ eShopMvc/
 | Smoke tests vs legacy (app must be running) | `$env:ESHOP_BASE_URL='http://localhost:5050'; $env:ESHOP_TARGET='legacy'; dotnet test --project tests/eShopMvc.SmokeTests` (set both explicitly: `$env:` values from a new-app run stay set in the same session) |
 | Smoke tests vs new app (app must be running, React client built first) | `$env:ESHOP_BASE_URL='http://localhost:5070'; $env:ESHOP_TARGET='new'; dotnet test --project tests/eShopMvc.SmokeTests` |
 | Containers: first-time setup | `Copy-Item .env.example .env`, then set `MSSQL_SA_PASSWORD` in `.env` (never commit `.env`) |
-| Containers: build and start | `docker compose up -d --build` → http://localhost:5080; `docker compose ps` shows both services `healthy` |
+| Containers: build and start | `docker compose up -d --build` → http://localhost:5080 (React UI at `/app/`; the image builds the client itself, no local `npm run build` needed); `docker compose ps` shows both services `healthy` |
 | Containers: logs | `docker compose logs -f web` (JSON, Production) |
 | Containers: stop (keep database) | `docker compose down` |
 | Containers: stop and delete database | `docker compose down -v` (also deletes the Data Protection keys, so forms opened before it fail once; next start migrates and seeds again) |
@@ -69,6 +70,7 @@ eShopMvc/
 | React client: tests, lint | `cd src/eShopMvc.Client; npm test`, `npm run lint` |
 | Browser tests: first-time setup | `cd tests/eShopMvc.E2ETests; npm ci; npx playwright install chromium` (same Node as the client; the browser goes to the user profile's `ms-playwright` cache) |
 | Browser tests (new app must be running, React client built first) | `cd tests/eShopMvc.E2ETests; npm test` (uses `ESHOP_BASE_URL`, default http://localhost:5070; one file: `npm test -- tests/list.spec.ts`) |
+| Browser tests vs container | `cd tests/eShopMvc.E2ETests; $env:ESHOP_BASE_URL='http://localhost:5080'; npm test` |
 | Browser tests: type check, failure details | `cd tests/eShopMvc.E2ETests; npm run typecheck`; after a failure `npx playwright show-trace test-results/<test>/trace.zip` |
 
 The legacy app needs the VS Developer PowerShell (handled by `run-legacy.ps1`)

@@ -1,18 +1,35 @@
-# Linux image for eShopMvc.Web (step 10). Build context: this folder (see docker-compose.yml).
-# Images are pinned to exact tags; the runtime patch (10.0.13) matches the EF Core packages.
+# Linux image for eShopMvc.Web (step 10; React client since phase 2 step 8).
+# Build context: src/ (see docker-compose.yml), because the image needs both projects (Decision P2-10).
+# Images are pinned to exact tags; the runtime patch (10.0.13) matches the EF Core packages, the Node
+# version matches eShopMvc.Client/.nvmrc (Decision P2-5).
+
+# Decision P2-10: the React client is built here, not by dotnet build. Only its output leaves this stage.
+FROM node:26.13.0-bookworm-slim AS client
+WORKDIR /src/eShopMvc.Client
+
+# Install first so the package layer is cached until the lock file changes.
+COPY eShopMvc.Client/package.json eShopMvc.Client/package-lock.json eShopMvc.Client/.npmrc ./
+RUN npm ci
+
+# Type check + Vite build; vite.config.ts writes to ../eShopMvc.Web/wwwroot/app.
+COPY eShopMvc.Client/ ./
+RUN npm run build
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0.402-noble AS build
-WORKDIR /src
+WORKDIR /src/eShopMvc.Web
 
 # Restore first so the package layer is cached until the project file changes.
-COPY eShopMvc.Web.csproj ./
+COPY eShopMvc.Web/eShopMvc.Web.csproj ./
 RUN dotnet restore eShopMvc.Web.csproj
 
-COPY . ./
+COPY eShopMvc.Web/ ./
+# Before publish, so the static assets manifest (MapStaticAssets) includes the client's files.
+COPY --from=client /src/eShopMvc.Web/wwwroot/app ./wwwroot/app
 RUN dotnet publish eShopMvc.Web.csproj --configuration Release --no-restore --output /app
 
 # Decision D-A: full Ubuntu 24.04 image. It has ICU (en-US formatting, R-12; globalization is not
 # invariant), time zone data (TZ, D-E) and bash for the health check (D-B). No curl or wget needed.
+# No Node either: the client is static files by now.
 FROM mcr.microsoft.com/dotnet/aspnet:10.0.13-noble AS final
 WORKDIR /app
 COPY --from=build /app ./
