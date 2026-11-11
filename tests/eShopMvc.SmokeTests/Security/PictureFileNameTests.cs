@@ -38,18 +38,19 @@ public sealed class PictureFileNameTests
     {
         using var client = new AppClient();
         var name = CatalogUi.NewItemName();
+        var (brand, type) = await CatalogApi.FirstBrandAndTypeAsync(client);
+        var body = CatalogApi.ValidItem(name, brand.Id, type.Id);
+        body["PictureFileName"] = TraversalFileName; // not on the React Create form, but accepted by the API
 
-        using var response = await PostCreateWithTraversalAsync(client, name);
+        using var response = await client.SendJsonAsync(HttpMethod.Post, CatalogApi.Items, body);
 
-        var created = await CatalogUi.FindByNameAsync(client, name);
+        var created = await CatalogApi.FindByNameAsync(client, name);
         if (created is not null)
         {
             await CatalogItemScope.Adopt(created.Id, name).DisposeAsync();
         }
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var page = HtmlPage.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken), "/Catalog/Create");
-        Assert.True(page.HasValidationError, "Expected a field validation error for PictureFileName.");
+        await AssertPictureFileNameErrorAsync(response);
         Assert.Null(created);
     }
 
@@ -73,16 +74,27 @@ public sealed class PictureFileNameTests
         using var client = new AppClient();
         await using var item = await CatalogItemScope.CreateAsync(client);
 
-        using (var response = await CatalogUi.PostEditAsync(client, item.Id, (_, fields) => fields["PictureFileName"] = TraversalFileName))
+        var (brand, type) = await CatalogApi.FirstBrandAndTypeAsync(client);
+        var body = CatalogApi.ValidItem(item.Name, brand.Id, type.Id);
+        body["Id"] = item.Id;
+        body["PictureFileName"] = TraversalFileName;
+
+        using (var response = await client.SendJsonAsync(HttpMethod.Put, $"{CatalogApi.Items}/{item.Id}", body))
         {
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            var page = HtmlPage.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken), $"/Catalog/Edit/{item.Id}");
-            Assert.True(page.HasValidationError, "Expected a field validation error for PictureFileName.");
+            await AssertPictureFileNameErrorAsync(response);
         }
 
         using var picture = await client.GetAsync($"/items/{item.Id}/pic");
         Assert.Equal(HttpStatusCode.OK, picture.StatusCode);
         Assert.Equal("image/png", picture.Content.Headers.ContentType?.MediaType); // still dummy.png
+    }
+
+    /// <summary>The API's 400 with a message for PictureFileName only, which the React forms show (P2-16).</summary>
+    private static async Task AssertPictureFileNameErrorAsync(HttpResponseMessage response)
+    {
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var json = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(["PictureFileName"], json.RootElement.GetProperty("errors").EnumerateObject().Select(p => p.Name));
     }
 
     private static Task<HttpResponseMessage> PostCreateWithTraversalAsync(AppClient client, string name) =>

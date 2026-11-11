@@ -1,11 +1,10 @@
 using System.Net;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 
 namespace eShopMvc.Web.IntegrationTests.Web;
 
 /// <summary>Decision P2-8: <c>GET /api/v1/session</c> for the React footer (R-11 values).</summary>
-public sealed partial class SessionApiTests(MockModeAppFactory factory) : IClassFixture<MockModeAppFactory>
+public sealed class SessionApiTests(MockModeAppFactory factory) : IClassFixture<MockModeAppFactory>
 {
     private const string Session = "/api/v1/session";
 
@@ -45,27 +44,14 @@ public sealed partial class SessionApiTests(MockModeAppFactory factory) : IClass
     }
 
     [Fact]
-    public async Task ApiFirst_RazorFooterShowsTheSameValues()
+    public async Task OtherApis_DoNotStartASession()
     {
-        using var client = factory.CreateClient();
+        // Decision R-11: legacy Web API had no session; only this endpoint starts one (P2-8).
+        using var client = factory.CreateRawClient();
 
-        var api = await GetSessionAsync(client);
-        await Task.Delay(1100, Token);
-        var footer = Footer(await client.GetStringAsync("/", Token));
+        using var response = await client.GetAsync("/api/brands", Token);
 
-        Assert.Equal(api, footer);
-    }
-
-    [Fact]
-    public async Task RazorFirst_ApiReturnsTheFooterValues()
-    {
-        using var client = factory.CreateClient();
-
-        var footer = Footer(await client.GetStringAsync("/", Token));
-        await Task.Delay(1100, Token);
-        var api = await GetSessionAsync(client);
-
-        Assert.Equal(footer, api);
+        Assert.False(response.Headers.Contains("Set-Cookie"));
     }
 
     /// <summary>The session values as the footer prints them: "{MachineName}, {SessionStartTime}".</summary>
@@ -74,9 +60,4 @@ public sealed partial class SessionApiTests(MockModeAppFactory factory) : IClass
         using var json = JsonDocument.Parse(await client.GetStringAsync(Session, Token));
         return $"{json.RootElement.GetProperty("MachineName").GetString()}, {json.RootElement.GetProperty("SessionStartTime").GetString()}";
     }
-
-    private static string Footer(string html) => FooterSmall().Match(html).Groups["text"].Value.Trim();
-
-    [GeneratedRegex("<footer.*?<small>(?<text>.*?)</small>", RegexOptions.Singleline)]
-    private static partial Regex FooterSmall();
 }

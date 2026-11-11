@@ -225,24 +225,6 @@ public sealed class CatalogApiTests(MockModeAppFactory factory) : IClassFixture<
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode); // Decision R-15
     }
 
-    [Fact]
-    public async Task RazorCreateForm_StillValidatesItsFormFieldToken()
-    {
-        // The header name changed (P2-7); a form post without the header must still be accepted.
-        using var client = factory.CreateRawClient();
-        var form = await client.GetStringAsync("/Catalog/Create", Token);
-        var token = System.Text.RegularExpressions.Regex.Match(form, "name=\"__RequestVerificationToken\" type=\"hidden\" value=\"([^\"]+)\"").Groups[1].Value;
-        Assert.NotEmpty(token);
-
-        using var response = await client.PostAsync("/Catalog/Create", new FormUrlEncodedContent(
-        [
-            new("__RequestVerificationToken", token), new("Name", "razor-form"), new("Price", "1"),
-            new("CatalogBrandId", "1"), new("CatalogTypeId", "1"),
-        ]), Token);
-
-        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
-    }
-
     private static Dictionary<string, object?> Item(string name, int id = 0, int brandId = 1, int typeId = 1) => new()
     {
         ["Id"] = id,

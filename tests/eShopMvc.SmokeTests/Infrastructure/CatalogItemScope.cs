@@ -2,7 +2,8 @@ namespace eShopMvc.SmokeTests.Infrastructure;
 
 /// <summary>
 /// A catalog item owned by one test: created through the Create form, deleted through the Delete form
-/// when disposed. Tests that change data work only on their own item, never on seeded ones.
+/// when disposed (new app: through the JSON API, Decision P2-12). Tests that change data work only on
+/// their own item, never on seeded ones.
 /// </summary>
 public sealed class CatalogItemScope : IAsyncDisposable
 {
@@ -28,6 +29,19 @@ public sealed class CatalogItemScope : IAsyncDisposable
     public static async Task<CatalogItemScope> CreateAsync(AppClient client)
     {
         var name = CatalogUi.NewItemName();
+        if (SmokeSettings.IsNew)
+        {
+            var (firstBrand, firstType) = await CatalogApi.FirstBrandAndTypeAsync(client);
+            var item = CatalogApi.ValidItem(name, firstBrand.Id, firstType.Id);
+            return new CatalogItemScope(await CatalogApi.CreateAsync(client, item), name)
+            {
+                Description = (string)item["Description"]!,
+                Price = "12.34",
+                BrandText = firstBrand.Text,
+                TypeText = firstType.Text,
+            };
+        }
+
         (string Value, string Text) brand = (string.Empty, string.Empty), type = (string.Empty, string.Empty);
 
         using (var response = await CatalogUi.PostCreateAsync(client, (form, fields) =>
@@ -60,7 +74,7 @@ public sealed class CatalogItemScope : IAsyncDisposable
         try
         {
             using var client = new AppClient();
-            await CatalogUi.DeleteAsync(client, Id);
+            _ = SmokeSettings.IsNew ? await CatalogApi.DeleteAsync(client, Id) : await CatalogUi.DeleteAsync(client, Id);
         }
         catch (Exception ex)
         {

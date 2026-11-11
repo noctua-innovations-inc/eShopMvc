@@ -6,8 +6,8 @@ import { CatalogDetails } from './pages/CatalogDetails.tsx'
 import { CatalogEdit } from './pages/CatalogEdit.tsx'
 import { CatalogIndex } from './pages/CatalogIndex.tsx'
 
-// The routes of the Razor UI (default route {controller=Catalog}/{action=Index}/{id?}), relative to
-// the Router's basename (Decision P2-4: /app until the cutover).
+// The routes of the Razor UI (default route {controller=Catalog}/{action=Index}/{id?}). The server
+// answers exactly these with the shell (Decision P2-9, Program.cs): keep the two lists the same.
 function App() {
   return (
     <Routes>

@@ -73,8 +73,14 @@ export class ApiError extends Error {
   }
 }
 
+// Decision P2-19: every call names the page it is made for (the path only, as the server logs no query
+// strings), so the server's log lines say which page was shown, as the Razor actions' lines did.
+function requestHeaders(): Record<string, string> {
+  return { Accept: 'application/json', 'X-Client-Page': window.location.pathname }
+}
+
 async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(url, { headers: { Accept: 'application/json' }, signal })
+  const response = await fetch(url, { headers: requestHeaders(), signal })
   if (!response.ok) {
     throw new ApiError(response.status, url)
   }
@@ -160,7 +166,7 @@ async function readValidationErrors(response: Response): Promise<ValidationError
 // ASP.NET Core); writes send its value back in the X-XSRF-TOKEN header. Without the cookie the header
 // is left out and the server answers 400.
 function writeHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { Accept: 'application/json' }
+  const headers = requestHeaders()
   const cookie = document.cookie.split('; ').find((c) => c.startsWith('XSRF-TOKEN='))
   if (cookie) {
     headers['X-XSRF-TOKEN'] = decodeURIComponent(cookie.slice('XSRF-TOKEN='.length))

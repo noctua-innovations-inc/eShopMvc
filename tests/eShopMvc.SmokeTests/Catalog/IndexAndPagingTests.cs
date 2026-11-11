@@ -8,7 +8,7 @@ namespace eShopMvc.SmokeTests.Catalog;
 [Trait("Category", "Catalog")]
 public sealed partial class IndexAndPagingTests
 {
-    [Theory]
+    [Theory(Skip = "Razor UI: legacy only since the cutover (P2-9)", SkipUnless = nameof(SmokeSettings.IsLegacy), SkipType = typeof(SmokeSettings))]
     [InlineData("/")]
     [InlineData("/Catalog")]
     [InlineData("/Catalog/Index")]
@@ -24,7 +24,7 @@ public sealed partial class IndexAndPagingTests
         Assert.Equal("Create New", create.TextContent.Trim());
     }
 
-    [Fact]
+    [Fact(Skip = "Razor UI: legacy only since the cutover (P2-9)", SkipUnless = nameof(SmokeSettings.IsLegacy), SkipType = typeof(SmokeSettings))]
     public async Task Index_EachRowLinksToItsActionsAndPicture()
     {
         using var client = new AppClient();
@@ -47,7 +47,7 @@ public sealed partial class IndexAndPagingTests
         }
     }
 
-    [Fact]
+    [Fact(Skip = "Razor UI: legacy only since the cutover (P2-9)", SkipUnless = nameof(SmokeSettings.IsLegacy), SkipType = typeof(SmokeSettings))]
     public async Task Paging_FirstPageOfSizeOne_ShowsOneRowAndPagerText()
     {
         using var client = new AppClient();
@@ -67,7 +67,7 @@ public sealed partial class IndexAndPagingTests
         Assert.DoesNotContain("esh-pager-item--hidden", next.ClassName ?? string.Empty);
     }
 
-    [Fact]
+    [Fact(Skip = "Razor UI: legacy only since the cutover (P2-9)", SkipUnless = nameof(SmokeSettings.IsLegacy), SkipType = typeof(SmokeSettings))]
     public async Task Paging_SecondPage_ShowsNextItemInIdOrder()
     {
         using var client = new AppClient();
@@ -80,7 +80,7 @@ public sealed partial class IndexAndPagingTests
         Assert.True(second.Id > first.Id, $"Items are ordered by Id: page 2 has {second.Id}, page 1 has {first.Id}.");
     }
 
-    [Fact]
+    [Fact(Skip = "Razor UI: legacy only since the cutover (P2-9)", SkipUnless = nameof(SmokeSettings.IsLegacy), SkipType = typeof(SmokeSettings))]
     public async Task Paging_BeyondLastPage_ShowsNoRows()
     {
         using var client = new AppClient();
@@ -91,7 +91,7 @@ public sealed partial class IndexAndPagingTests
         Assert.Empty(CatalogUi.Rows(page));
     }
 
-    [Fact]
+    [Fact(Skip = "Razor UI: legacy only since the cutover (P2-9)", SkipUnless = nameof(SmokeSettings.IsLegacy), SkipType = typeof(SmokeSettings))]
     public async Task Layout_FooterShowsSessionInfo()
     {
         using var client = new AppClient();
@@ -103,7 +103,7 @@ public sealed partial class IndexAndPagingTests
         Assert.Matches(@"^\S.*, \S.*$", text);
     }
 
-    [Fact]
+    [Fact(Skip = "Razor UI: legacy only since the cutover (P2-9)", SkipUnless = nameof(SmokeSettings.IsLegacy), SkipType = typeof(SmokeSettings))]
     public async Task Layout_AllReferencedStylesheetsScriptsAndImagesLoad()
     {
         using var client = new AppClient();

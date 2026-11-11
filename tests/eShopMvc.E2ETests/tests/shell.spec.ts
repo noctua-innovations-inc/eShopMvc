@@ -59,11 +59,39 @@ test.describe('Shell', () => {
     await expect(page.locator('tbody tr').first()).toBeVisible()
   })
 
-  test('says so for an unknown route (P2-18)', async ({ page }) => {
-    await page.goto(app('/Nope'))
+  for (const path of ['/Nope', '/Catalog/Nope', '/app/']) {
+    test(`answers the unknown URL ${path} with a 404, not the shell (P2-9, P2-18)`, async ({ page }) => {
+      const response = await page.goto(path)
 
-    await expect(page.getByRole('alert')).toHaveText('Page not found.')
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Catalog manager (MVC)')
+      expect(response!.status()).toBe(404)
+      await expect(page.locator('#root')).toHaveCount(0)
+    })
+  }
+
+  test('tells the server which page each API call is for (P2-19)', async ({ page, request }) => {
+    const item = (await getPage(request)).Data[0]
+    const pages: string[] = []
+    page.on('request', (sent) => {
+      const url = new URL(sent.url())
+      if (url.pathname.startsWith('/api/')) {
+        pages.push(`${url.pathname} for ${sent.headers()['x-client-page']}`)
+      }
+    })
+
+    await page.goto(app('/?pageSize=5&pageIndex=0'))
+    await page.locator('tbody tr').first().getByRole('link', { name: 'Edit' }).click()
+    await expect(page.getByRole('heading', { level: 2 })).toHaveText('Edit')
+    await expect(page.locator('select').first()).not.toBeEmpty()
+
+    expect(pages.sort()).toEqual(
+      [
+        '/api/v1/catalog/items for /',
+        '/api/v1/session for /',
+        `/api/v1/catalog/items/${item.Id} for /Catalog/Edit/${item.Id}`,
+        `/api/v1/catalog/brands for /Catalog/Edit/${item.Id}`,
+        `/api/v1/catalog/types for /Catalog/Edit/${item.Id}`,
+      ].sort(),
+    )
   })
 })
 
@@ -82,17 +110,5 @@ test.describe('Footer', () => {
 
     await page.reload()
     await expect(footer).toHaveText(first!)
-  })
-
-  test('shows the same values as the Razor footer of the same session', async ({ page }) => {
-    test.skip(app('') === '', 'after the cutover there is no Razor page to compare with')
-
-    await page.goto(app('/'))
-    const footer = page.locator('footer small')
-    await expect(footer).toHaveText(footerText)
-    const react = await footer.textContent()
-
-    await page.goto('/Catalog/Details/1')
-    await expect(footer).toHaveText(react!)
   })
 })

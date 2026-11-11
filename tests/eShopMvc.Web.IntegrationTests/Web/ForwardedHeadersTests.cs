@@ -13,13 +13,13 @@ public sealed class ForwardedHeadersTests
         // ASPNETCORE_FORWARDEDHEADERS_ENABLED=true in a container = host setting FORWARDEDHEADERS_ENABLED.
         await using var factory = new SettingsAppFactory(("FORWARDEDHEADERS_ENABLED", "true"));
         using var client = factory.CreateRawClient();
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/Catalog/Index?pageSize=1");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/catalog/items?pageSize=1");
         request.Headers.Add("X-Forwarded-Proto", "https");
 
         using var response = await client.SendAsync(request, Token);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains("src=\"https://localhost/items/1/pic\"", await response.Content.ReadAsStringAsync(Token));
+        Assert.Contains("\"PictureUri\":\"https://localhost/items/1/pic\"", await response.Content.ReadAsStringAsync(Token));
     }
 
     [Fact]
@@ -28,12 +28,12 @@ public sealed class ForwardedHeadersTests
         // The default (and local compose): a client can't change the scheme the app sees.
         await using var factory = new SettingsAppFactory();
         using var client = factory.CreateRawClient();
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/Catalog/Index?pageSize=1");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/catalog/items?pageSize=1");
         request.Headers.Add("X-Forwarded-Proto", "https");
 
         using var response = await client.SendAsync(request, Token);
 
-        Assert.Contains("src=\"http://localhost/items/1/pic\"", await response.Content.ReadAsStringAsync(Token));
+        Assert.Contains("\"PictureUri\":\"http://localhost/items/1/pic\"", await response.Content.ReadAsStringAsync(Token));
     }
 
     [Fact]
@@ -43,7 +43,7 @@ public sealed class ForwardedHeadersTests
         await using var factory = new SettingsAppFactory();
         using var client = factory.CreateRawClient();
 
-        using var response = await client.GetAsync("/", Token);
+        using var response = await client.GetAsync("/api/v1/catalog/brands", Token);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }

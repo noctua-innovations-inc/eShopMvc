@@ -12,7 +12,8 @@
 <body>
     <header class="navbar navbar-light navbar-static-top">
         <div class="esh-header-brand">
-            <a href="@Url.Action("index", "catalog")">
+            @* The list is a React page since the cutover (P2-9): no action to build the URL from. *@
+            <a href="/">
                 <img src="~/images/brand.png" />
             </a>
         </div>
@@ -41,9 +42,5 @@
             </article>
         </div>
     </footer>
-
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
-    <script src="~/lib/bootstrap/dist/js/bootstrap.min.js"></script>
-    @RenderSection("Scripts", required: false)
 </body>
 </html>

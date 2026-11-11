@@ -29,6 +29,17 @@ public sealed class SuiteFixture : IAsyncLifetime
                 ex);
         }
 
+        // Decision P2-12: the new app's pages are React since the cutover, so its items go through the JSON API.
+        if (SmokeSettings.IsNew)
+        {
+            foreach (var leftover in (await CatalogApi.AllItemsAsync(client)).Where(i => i.Name.StartsWith(CatalogUi.SmokePrefix, StringComparison.Ordinal)))
+            {
+                await CatalogApi.DeleteAsync(client, leftover.Id);
+            }
+
+            return;
+        }
+
         foreach (var leftover in (await CatalogUi.AllRowsAsync(client)).Where(r => r.Name.StartsWith(CatalogUi.SmokePrefix, StringComparison.Ordinal)))
         {
             await CatalogUi.DeleteAsync(client, leftover.Id);

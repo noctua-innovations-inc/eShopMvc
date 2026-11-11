@@ -8,10 +8,12 @@ const backend = 'http://localhost:5070'
 const proxied = ['/api', '/items', '/health', '/css', '/lib', '/images', '/fonts', '/favicon.ico']
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [react()],
-  // Decisions P2-2 and P2-4: served by the ASP.NET Core app from wwwroot/app under /app/.
-  base: '/app/',
+  // Decisions P2-2 and P2-9: the pages have the Razor UI's URLs (/, /Catalog/...), but the built files
+  // stay in wwwroot/app and are served under /app/ (the build empties its folder, and wwwroot holds
+  // the CSS, images and libraries). The dev server serves the pages from / too.
+  base: command === 'build' ? '/app/' : '/',
   build: {
     outDir: '../eShopMvc.Web/wwwroot/app',
     emptyOutDir: true,
@@ -25,4 +27,4 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
   },
-})
+}))

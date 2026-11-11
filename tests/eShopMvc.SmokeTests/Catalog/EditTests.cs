@@ -6,7 +6,7 @@ namespace eShopMvc.SmokeTests.Catalog;
 [Trait("Category", "Catalog")]
 public sealed class EditTests
 {
-    [Fact]
+    [Fact(Skip = "Razor UI: legacy only since the cutover (P2-9)", SkipUnless = nameof(SmokeSettings.IsLegacy), SkipType = typeof(SmokeSettings))]
     public async Task EditForm_IsPrefilledWithItem()
     {
         using var client = new AppClient();
@@ -22,7 +22,7 @@ public sealed class EditTests
         Assert.True(page.Single("input[name='PictureFileName']").HasAttribute("readonly"), "PictureFileName should be read-only.");
     }
 
-    [Fact]
+    [Fact(Skip = "Razor UI: legacy only since the cutover (P2-9)", SkipUnless = nameof(SmokeSettings.IsLegacy), SkipType = typeof(SmokeSettings))]
     public async Task Edit_ValidChanges_RedirectsToIndexAndDetailsShowNewValues()
     {
         using var client = new AppClient();
@@ -48,7 +48,7 @@ public sealed class EditTests
         Assert.Contains(values, v => v.Contains("23.45", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [Fact(Skip = "Razor UI: legacy only since the cutover (P2-9)", SkipUnless = nameof(SmokeSettings.IsLegacy), SkipType = typeof(SmokeSettings))]
     public async Task Edit_InvalidPrice_ReturnsFormWithValidationErrorAndKeepsItem()
     {
         using var client = new AppClient();

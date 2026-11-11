@@ -6,7 +6,7 @@ namespace eShopMvc.SmokeTests.Catalog;
 [Trait("Category", "Catalog")]
 public sealed class CreateTests
 {
-    [Fact]
+    [Fact(Skip = "Razor UI: legacy only since the cutover (P2-9)", SkipUnless = nameof(SmokeSettings.IsLegacy), SkipType = typeof(SmokeSettings))]
     public async Task CreateForm_HasTokenInputsAndPopulatedSelects()
     {
         using var client = new AppClient();
@@ -24,7 +24,7 @@ public sealed class CreateTests
         Assert.NotEmpty(page.SelectOptions("CatalogTypeId"));
     }
 
-    [Fact]
+    [Fact(Skip = "Razor UI: legacy only since the cutover (P2-9)", SkipUnless = nameof(SmokeSettings.IsLegacy), SkipType = typeof(SmokeSettings))]
     public async Task Create_ValidItem_RedirectsToIndexAndItemIsListed()
     {
         using var client = new AppClient();
@@ -41,7 +41,7 @@ public sealed class CreateTests
         Assert.Equal("dummy.png", row.PictureFileName);
     }
 
-    [Fact]
+    [Fact(Skip = "Razor UI: legacy only since the cutover (P2-9)", SkipUnless = nameof(SmokeSettings.IsLegacy), SkipType = typeof(SmokeSettings))]
     public async Task Create_EmptyName_ReturnsFormWithValidationErrorAndCreatesNothing()
     {
         using var client = new AppClient();
@@ -59,7 +59,7 @@ public sealed class CreateTests
         Assert.Null(await CatalogUi.FindAsync(client, r => r.Description == $"Smoke test item {marker}"));
     }
 
-    [Fact]
+    [Fact(Skip = "Razor UI: legacy only since the cutover (P2-9)", SkipUnless = nameof(SmokeSettings.IsLegacy), SkipType = typeof(SmokeSettings))]
     public async Task Create_WithoutAntiforgeryToken_IsRejectedAndCreatesNothing()
     {
         // Fresh client that never loaded the form: no antiforgery cookie and no token field.

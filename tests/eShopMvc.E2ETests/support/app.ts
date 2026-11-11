@@ -1,7 +1,7 @@
 import type { APIRequestContext, Locator, Page as Page_ } from '@playwright/test'
 
-/** Decision P2-4: where the React UI lives until the cutover; then ''. */
-export const appBasePath = '/app'
+/** Decision P2-9: since the cutover the React pages have the Razor UI's URLs (until then: '/app', P2-4). */
+export const appBasePath = ''
 
 /** The URL of a React page, e.g. `app('/Catalog/Details/1')`. */
 export function app(path = '/'): string {
@@ -9,8 +9,7 @@ export function app(path = '/'): string {
 }
 
 /**
- * Matches the browser's URL for a React page, query string included in `path` if any. The list is
- * `/app` after a click on a link inside the app and `/app/` when opened directly; both are the list.
+ * Matches the browser's URL for a React page, query string included in `path` if any.
  */
 export function appUrl(path = '/'): RegExp {
   const escaped = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

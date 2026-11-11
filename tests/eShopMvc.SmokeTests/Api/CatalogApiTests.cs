@@ -92,7 +92,7 @@ public sealed class CatalogApiTests
         using var response = await client.SendJsonAsync(HttpMethod.Post, Items, Item(name, brandIds[0], typeIds[0]), withXsrfHeader: false);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Null(await CatalogUi.FindByNameAsync(client, name));
+        Assert.Null(await CatalogApi.FindByNameAsync(client, name));
     }
 
     [Fact(Skip = "New-app API (P2-6, P2-13)", SkipUnless = nameof(SmokeSettings.IsNew), SkipType = typeof(SmokeSettings))]

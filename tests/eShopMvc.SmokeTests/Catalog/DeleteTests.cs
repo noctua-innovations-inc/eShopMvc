@@ -6,7 +6,7 @@ namespace eShopMvc.SmokeTests.Catalog;
 [Trait("Category", "Catalog")]
 public sealed class DeleteTests
 {
-    [Fact]
+    [Fact(Skip = "Razor UI: legacy only since the cutover (P2-9)", SkipUnless = nameof(SmokeSettings.IsLegacy), SkipType = typeof(SmokeSettings))]
     public async Task DeletePage_AsksForConfirmationWithTokenForm()
     {
         using var client = new AppClient();
@@ -19,7 +19,7 @@ public sealed class DeleteTests
         Assert.False(string.IsNullOrEmpty(page.AntiforgeryToken));
     }
 
-    [Fact]
+    [Fact(Skip = "Razor UI: legacy only since the cutover (P2-9)", SkipUnless = nameof(SmokeSettings.IsLegacy), SkipType = typeof(SmokeSettings))]
     public async Task Delete_Confirmed_RedirectsToIndexAndItemIsGone()
     {
         using var client = new AppClient();

@@ -162,10 +162,52 @@ target for the UI; the smoke tests can still run against it.
   React route (e.g. `/app/Nope`) gets the shell with status 200 and "Page not found." in place of the
   page content, where the Razor UI returned an empty 404. Whether the server should answer such URLs
   with a real 404 belongs to the open question on status codes (cutover). Vitest-tested.
+  - **Since the cutover** (step 9): the server answers only the page routes of P2-9 with the shell, so
+    an unknown URL is a real, empty 404 again, as with the Razor UI. React's "Page not found." route
+    stays as a safety net (a route added to React but not to `Program.cs` would otherwise show a blank
+    page after a click). No link reaches it; the only URL that does is the shell file itself,
+    `/app/index.html`, which is still served as a static file. Browser-tested (404, no shell).
+- **P2-19 Page views in the log** (step 9, approved 2026-11-10): the Razor actions logged
+  "Now loading... /Catalog/…" for every page; React pages are static files and client-side
+  navigation asks the server for no page at all. Instead the client sends the page it is showing in
+  the `X-Client-Page` header of every API call (`location.pathname`: no query string, as L2), and
+  `ClientPageLoggingScopeMiddleware` puts it into the logging scope as `Page`, next to `UserAgent` and
+  `RequestPath`. The API's own "Now loading..."/"Now processing..." lines therefore say which page
+  they were for (Edit of item 5: three lines with `Page: /Catalog/Edit/5`). The header is
+  client-controlled: only one value of at most 200 printable ASCII characters that starts with a
+  single `/` and has no `?`, `#`, `\`, `"` or space is used; anything else is ignored. Not logged: a
+  page that makes no API call (none exists) and the 404s for unknown URLs (the Razor UI didn't log
+  those either). Rejected alternatives: a page-view endpoint (a new route anyone can call to write
+  log lines) and logging when the shell is served (misses navigation inside the app). Unit-, Vitest-
+  and browser-tested.
 - **P2-9 Cutover routes:** `/`, `/Catalog`, `/Catalog/Index`, `/Catalog/Details/{id}`,
   `/Catalog/Create`, `/Catalog/Edit/{id}` and `/Catalog/Delete/{id}` (same query strings, e.g.
   `?pageSize=…&pageIndex=…`) are served by a SPA fallback to `app/index.html` and matched by React
   Router. The MVC catalog actions and views are removed; `/items/{id}/pic` and all API routes stay.
+  - **Step 9** (2026-11-10; the last Razor commit is tagged `phase2-pre-cutover`, local tag): one
+    `MapFallbackToFile(route, "app/index.html")` per route above in `Program.cs`, no catch-all; the
+    same list is in the client's `App.tsx`. `MapControllers()` replaces the legacy default route
+    (everything left is attribute-routed). The Router has no basename any more. The built files stay
+    in `wwwroot/app` with `/app/assets/…` URLs (Vite `base` is `/app/` for the build only): building
+    into `wwwroot` would empty the folder that holds the CSS, images and libraries. The dev server
+    serves the pages at http://localhost:5173/.
+  - **Deliberate differences from the Razor UI's URLs** (approved 2026-11-10; integration-, smoke- and
+    browser-tested):
+    - Page URLs answer 200 with the shell whatever the id or paging values; React shows the message
+      of P2-14/P2-15 (Razor: 404 for an unknown id, 400 for invalid paging). The API still answers
+      404/400.
+    - 404 now: `/Catalog/Details?id=1` (id in the query string), `/Catalog/Details`, `/Catalog/Edit`
+      and `/Catalog/Delete` without an id (Razor: 400), extra segments such as `/Catalog/Create/5`
+      and `/Catalog/Index/5`, and every `/app/…` URL of the side-by-side period (P2-4). No link in
+      the app produces any of them.
+    - `POST` to `/Catalog/Create`, `/Catalog/Edit/{id}` and `/Catalog/Delete/{id}` (the Razor forms)
+      answers 405; only the API writes data.
+    - Without a client build (`npm run build`), the page routes answer 404: `dotnet run` alone no
+      longer shows the list. The container image builds the client itself (P2-10).
+  - **Error page (R-23):** `Views/Shared/Error.cshtml` and `_Layout.cshtml` stay for unhandled
+    server errors outside Development (in practice: an API or picture URL opened directly). The
+    layout lost its jQuery/Bootstrap script tags and its brand link is a plain `/` (there is no
+    action left to build it from). `AddControllersWithViews` stays for this one view.
 - **P2-10 Container:** the Dockerfile gets a Node build stage (`npm ci`, `npm run build`) before
   `dotnet publish`, so `MapStaticAssets` includes the built files. The compose build context moves
   from `./src/eShopMvc.Web` to `./src` (both projects needed). The runtime image stays without Node.
@@ -183,6 +225,10 @@ target for the UI; the smoke tests can still run against it.
   price and pager formatting copied from the Razor UI, including the preserved quirks (R-24 labels and
   pager text, R-29 banner fix). jQuery, jQuery Validation and `bootstrap.min.js` are not used by React;
   remove them with LibMan at the cutover if nothing else needs them.
+  - **Step 9:** removed: `jquery`, `jquery-validation`, `jquery-validation-unobtrusive` (LibMan
+    uninstall) and Bootstrap's `dist/js` files (dropped from `libman.json`). `wwwroot/lib` now holds
+    only the Bootstrap CSS, its map and licence. Integration-tested (the four style sheets and layout
+    images load; the scripts are 404).
   - **Step 4:** the four style sheets are linked in the client's `index.html` by absolute path with
     `vite-ignore` (Vite leaves them alone). The banner and title keep "Catalog manager (MVC)"; the list
     sets the title "Index - Catalog manager (MVC)" (approved 2026-11-10). Prices use
@@ -234,16 +280,34 @@ target for the UI; the smoke tests can still run against it.
     Details, Delete, Edit and Create with the Razor pages at widths 1280, 1920, 800 and 400: no
     difference, except the empty `<div>` at the end of the Razor Create view, which renders nothing
     and is not copied. Error states and the validation messages were not part of that comparison.
+  - **Step 9** (cutover):
+    - **Smoke tests:** the HTML tests in `Catalog/` (25 cases) run only for `ESHOP_TARGET=legacy`
+      (approved 2026-11-10); against the new app they are skipped, and the same behaviour is covered
+      by the API smoke tests and the browser tests. For the new app, `SuiteFixture`'s sweep,
+      `CatalogItemScope`, the picture test and the two R-9 tests go through the JSON API (new helper
+      `Infrastructure/CatalogApi.cs`); `ReactShellTests` checks the page routes, the 404s and the
+      refused form post of P2-9. Against legacy the suite is unchanged in what it runs (40 passed).
+    - **Browser tests:** `appBasePath` is `''`. Removed: the comparison with the Razor footer (no
+      Razor page left). New: unknown URLs are a 404 without the shell; the `X-Client-Page` header.
+    - **Integration and unit tests removed with the Razor pages**, and what covers the behaviour now:
+      `CatalogControllerTests` (R-15, R-16: `CatalogApiControllerTests`); `CatalogPageTests` (routes:
+      `SpaFallbackTests`; en-US price R-12: Vitest list tests and the browser tests; invalid
+      paging: `CatalogApiTests`; antiforgery: `CatalogApiTests`); `LayoutAndFormTests` (footer R-11:
+      `SessionApiTests` and the browser tests; assets: new `StaticAssetTests`; R-15 and R-9 posts:
+      `CatalogApiTests`; R-18 no modernizr/respond: the shell has one module script, checked by
+      `ReactShellTests`); the Razor-footer and Razor-form cases of `SessionApiTests` and
+      `CatalogApiTests`. Gone without a successor, because the behaviour no longer exists: one
+      antiforgery token per Razor form, and R-24's "invalid Edit re-renders with the picture" (the
+      React form never reloads; the picture stays on screen).
+    - `ErrorPageTests` and `ForwardedHeadersTests` now go through API URLs. Integration tests must
+      not depend on the built client (git-ignored): `SpaFallbackTests` accepts the shell or a 404 for
+      the page routes; the smoke tests assert the shell.
 
 ## Open questions (ask when the step that needs them is reached)
-- **Error page (R-23) after the cutover:** keep `Views/Shared/Error.cshtml` for server-side errors, or
-  replace it with a static page? (Failed API calls are answered: P2-14 for the list, P2-15 for
-  Details and Delete, P2-16 for the forms.)
-- **Status codes on page URLs:** after the cutover, `/Catalog/Details/999` returns the SPA shell (200)
-  and React shows "not found", where the Razor UI returned 404 (likewise 400 for invalid paging).
-  Accept and document, or check ids on the server before serving the shell?
-- **Legacy in the smoke tests:** after the cutover, keep the HTML Catalog tests for `ESHOP_TARGET=legacy`
-  only, or retire them?
+All answered at the cutover (2026-11-10):
+- ~~Error page (R-23) after the cutover~~: kept (P2-9, step 9).
+- ~~Status codes on page URLs~~: accepted and documented (P2-9, deliberate differences).
+- ~~Legacy in the smoke tests~~: HTML Catalog tests kept for `ESHOP_TARGET=legacy` only (P2-12, step 9).
 - ~~Exact Node version and Playwright browsers~~: answered (Node 26.13.0, step 1; Chromium only, step 7).
 
 ## Steps
@@ -286,7 +350,10 @@ target for the UI; the smoke tests can still run against it.
 - [x] Container (image built by `docker compose up -d --build`, both services healthy; against
   http://localhost:5080: smoke 51/0/4 of 55, browser 26/26; unit 143/143, integration 93/93; client
   unchanged, so Vitest and lint not rerun)
-- [ ] Cutover
+- [x] Cutover (unit 157/157, integration 98/98; client build, 74/74 Vitest, lint clean; against
+  http://localhost:5070 and the rebuilt container at http://localhost:5080: smoke vs new 37/0/29 of
+  66 (29 legacy-only), browser 28/28; dev server pages and proxy checked at http://localhost:5173/;
+  smoke vs legacy 40/0/26 of 66 (26 new-only))
 - [ ] Parity verified
 
 Update this checklist as steps complete.

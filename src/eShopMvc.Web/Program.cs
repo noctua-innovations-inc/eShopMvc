@@ -11,8 +11,7 @@ builder.Services.AddControllersWithViews(options => options.Filters.Add<SessionS
     .AddJsonOptions(options => options.JsonSerializerOptions.PropertyNamingPolicy = null);
 builder.Services.AddCatalogServices(builder.Configuration);
 
-// Decision P2-7: the React client sends the antiforgery token in a header; the Razor forms still post
-// it as a form field (read when the header is absent).
+// Decision P2-7: the React client sends the antiforgery token in a header.
 builder.Services.AddAntiforgery(options => options.HeaderName = AntiforgeryCookieFilter.HeaderName);
 
 // Decision R-11: session for the footer (legacy InProc session + Session_Start, 20-minute idle timeout).
@@ -31,6 +30,8 @@ await app.InitializeCatalogDatabaseAsync();
 
 // Decision L2: User-Agent in the logging scope of everything logged for the request (first, so it covers all).
 app.UseMiddleware<UserAgentLoggingScopeMiddleware>();
+// Decision P2-19: likewise the React page an API call was made for.
+app.UseMiddleware<ClientPageLoggingScopeMiddleware>();
 
 if (!app.Environment.IsDevelopment())
 {
@@ -63,14 +64,22 @@ app.UseAuthorization();
 
 app.MapStaticAssets();
 
-app.MapControllerRoute(
-    name: "default",
-    pattern: "{controller=Catalog}/{action=Index}/{id?}")
+// The API, the pictures and the error page: all attribute-routed. The legacy default route
+// ({controller=Catalog}/{action=Index}/{id?}) went with the Razor catalog pages (Decision P2-9).
+app.MapControllers()
     .WithStaticAssets();
 
-// Decision P2-4: until the cutover the React UI lives under /app/; its client-side routes get the shell.
-// ":nonfile" keeps a missing /app/assets/* file a 404.
-app.MapFallbackToFile("/app/{**path:nonfile}", "app/index.html");
+// Decision P2-9: the page URLs of the Razor UI get the React shell (built into wwwroot/app, served under
+// /app/); React Router shows the page. Only these: any other URL stays a 404.
+string[] pageRoutes =
+[
+    "/", "/Catalog", "/Catalog/Index", "/Catalog/Create",
+    "/Catalog/Details/{id}", "/Catalog/Edit/{id}", "/Catalog/Delete/{id}",
+];
+foreach (var pageRoute in pageRoutes)
+{
+    app.MapFallbackToFile(pageRoute, "app/index.html");
+}
 
 app.MapCatalogHealthChecks();
 

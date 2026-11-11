@@ -13,7 +13,8 @@ namespace eShopMvc.Web.IntegrationTests.Web;
 /// <summary>
 /// Decision R-23 outside Development: the exception handler's error page and empty 400/404 bodies.
 /// The app runs in-process in the Production environment, in mock mode, with a catalog service whose
-/// list call throws so that "/" produces an unhandled exception.
+/// list call throws so that the list API produces an unhandled exception (the pages themselves are
+/// static files since P2-9).
 /// </summary>
 public sealed class ErrorPageTests(ErrorPageTests.ProductionAppFactory factory) : IClassFixture<ErrorPageTests.ProductionAppFactory>
 {
@@ -26,7 +27,7 @@ public sealed class ErrorPageTests(ErrorPageTests.ProductionAppFactory factory) 
     {
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
-        using var response = await client.GetAsync("/", Token);
+        using var response = await client.GetAsync("/api/v1/catalog/items", Token);
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
         var html = await response.Content.ReadAsStringAsync(Token);
@@ -35,6 +36,8 @@ public sealed class ErrorPageTests(ErrorPageTests.ProductionAppFactory factory) 
         Assert.Matches(@"<strong>Request ID:</strong> <code>[0-9a-f-]+</code>", html);
         Assert.Contains("Catalog manager <span>(MVC)</span>", html); // rendered inside the layout
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(html, "<html")); // not a nested document
+        Assert.Contains("<a href=\"/\">", html); // the brand link still leads to the list
+        Assert.DoesNotContain("<script", html); // the Razor UI's scripts went with it (P2-11)
         Assert.DoesNotContain("secret-detail", html);
         Assert.DoesNotContain(nameof(InvalidOperationException), html);
         Assert.DoesNotContain("ThrowingCatalogService", html); // no stack trace
@@ -42,8 +45,8 @@ public sealed class ErrorPageTests(ErrorPageTests.ProductionAppFactory factory) 
     }
 
     [Theory]
-    [InlineData("/Catalog/Details", HttpStatusCode.BadRequest)]
-    [InlineData("/Catalog/Details/999", HttpStatusCode.NotFound)]
+    [InlineData("/items/0/pic", HttpStatusCode.BadRequest)]
+    [InlineData("/Catalog/Details", HttpStatusCode.NotFound)]
     [InlineData("/no/such/page", HttpStatusCode.NotFound)]
     [InlineData("/Pics/1.png", HttpStatusCode.NotFound)]
     public async Task BadRequestAndNotFound_HaveEmptyBodies(string path, HttpStatusCode expected)

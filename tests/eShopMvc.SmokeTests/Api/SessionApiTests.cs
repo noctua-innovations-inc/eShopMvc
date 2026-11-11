@@ -8,16 +8,19 @@ namespace eShopMvc.SmokeTests.Api;
 public sealed class SessionApiTests
 {
     [Fact(Skip = "New-app API (P2-8)", SkipUnless = nameof(SmokeSettings.IsNew), SkipType = typeof(SmokeSettings))]
-    public async Task Get_ReturnsLegacyFormattedValues_SameAsTheRazorFooter()
+    public async Task Get_ReturnsLegacyFormattedValues_TheSameForTheWholeSession()
     {
         using var client = new AppClient();
 
         var first = await GetSessionAsync(client);
-        var page = await client.GetPageAsync("/");
+        using (await client.GetAsync("/"))
+        {
+            // The shell is a static file and must not start a session of its own.
+        }
+        await Task.Delay(1100, TestContext.Current.CancellationToken); // the start time has one-second resolution
         var second = await GetSessionAsync(client);
 
         Assert.Matches(@"^.+, \d{1,2}/\d{1,2}/\d{4} \d{1,2}:\d{2}:\d{2} (AM|PM)$", first);
-        Assert.Equal(first, page.Single("footer small").TextContent.Trim());
         Assert.Equal(first, second);
     }
 

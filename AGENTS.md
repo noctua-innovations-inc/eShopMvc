@@ -8,8 +8,8 @@ See "Phases" below.
 ```
 eShopMvc/
   legacy/eShopLegacyMVCSolution/   original app – READ-ONLY reference
-  src/eShopMvc.Web/                new ASP.NET Core MVC app (.NET 10), http://localhost:5070
-  src/eShopMvc.Client/             React client (Vite, TypeScript; phase 2), builds into src/eShopMvc.Web/wwwroot/app
+  src/eShopMvc.Web/                new ASP.NET Core app (.NET 10): JSON API, pictures, serves the React UI; http://localhost:5070
+  src/eShopMvc.Client/             React client (Vite, TypeScript; phase 2): all pages; builds into src/eShopMvc.Web/wwwroot/app
   tests/eShopMvc.SmokeTests/       HTTP smoke tests, runnable against either app
   tests/eShopMvc.E2ETests/         browser tests of the React UI (Playwright, npm project; not in eShopMvc.slnx)
   tests/eShopMvc.Web.UnitTests/    unit tests for src/eShopMvc.Web (no running app, no database)
@@ -44,7 +44,7 @@ eShopMvc/
 |---|---|
 | Build + run legacy app | `.\run-legacy.ps1` → http://localhost:5050 (press `Q` to stop) |
 | Build new app + tests | `dotnet build` (root `eShopMvc.slnx`) |
-| Run new app (creates/migrates and seeds `eShopMvc.CatalogDb`) | `dotnet run --project src/eShopMvc.Web` → http://localhost:5070 |
+| Run new app (creates/migrates and seeds `eShopMvc.CatalogDb`) | `dotnet run --project src/eShopMvc.Web` → http://localhost:5070 (build the React client first, see below: without it the pages are 404 and only the API answers) |
 | Run new app with mock data | `dotnet run --project src/eShopMvc.Web -- --Catalog:UseMockData=true` |
 | Unit tests | `dotnet test --project tests/eShopMvc.Web.UnitTests` |
 | Integration tests (LocalDB) | `dotnet test --project tests/eShopMvc.Web.IntegrationTests` |
@@ -58,15 +58,15 @@ eShopMvc/
 | Smoke tests vs legacy (app must be running) | `$env:ESHOP_BASE_URL='http://localhost:5050'; $env:ESHOP_TARGET='legacy'; dotnet test --project tests/eShopMvc.SmokeTests` (set both explicitly: `$env:` values from a new-app run stay set in the same session) |
 | Smoke tests vs new app (app must be running, React client built first) | `$env:ESHOP_BASE_URL='http://localhost:5070'; $env:ESHOP_TARGET='new'; dotnet test --project tests/eShopMvc.SmokeTests` |
 | Containers: first-time setup | `Copy-Item .env.example .env`, then set `MSSQL_SA_PASSWORD` in `.env` (never commit `.env`) |
-| Containers: build and start | `docker compose up -d --build` → http://localhost:5080 (React UI at `/app/`; the image builds the client itself, no local `npm run build` needed); `docker compose ps` shows both services `healthy` |
+| Containers: build and start | `docker compose up -d --build` → http://localhost:5080 (the image builds the React client itself, no local `npm run build` needed); `docker compose ps` shows both services `healthy` |
 | Containers: logs | `docker compose logs -f web` (JSON, Production) |
 | Containers: stop (keep database) | `docker compose down` |
 | Containers: stop and delete database | `docker compose down -v` (also deletes the Data Protection keys, so forms opened before it fail once; next start migrates and seeds again) |
 | Containers: query the database | `docker compose exec sqlserver bash -c '/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -d eShopMvc.CatalogDb -Q "SELECT COUNT(*) FROM Catalog"'` |
 | Smoke tests vs container | `$env:ESHOP_BASE_URL='http://localhost:5080'; $env:ESHOP_TARGET='new'; dotnet test --project tests/eShopMvc.SmokeTests` |
 | React client: install packages | `cd src/eShopMvc.Client; npm ci` (needs Node 26.13.0 from `.nvmrc`; with fnm: `fnm install 26.13.0`, then `fnm use` in that folder) |
-| React client: dev server (new app must be running) | `cd src/eShopMvc.Client; npm run dev` → http://localhost:5173/app/ (proxies the API, pictures and static files to http://localhost:5070) |
-| React client: build | `cd src/eShopMvc.Client; npm run build` (type check + build into `src/eShopMvc.Web/wwwroot/app`; run before `dotnet build`/`dotnet run` to serve it at http://localhost:5070/app/) |
+| React client: dev server (new app must be running) | `cd src/eShopMvc.Client; npm run dev` → http://localhost:5173/ (proxies the API, pictures and static files to http://localhost:5070) |
+| React client: build | `cd src/eShopMvc.Client; npm run build` (type check + build into `src/eShopMvc.Web/wwwroot/app`; run before `dotnet build`/`dotnet run`, which then serve the pages at http://localhost:5070/) |
 | React client: tests, lint | `cd src/eShopMvc.Client; npm test`, `npm run lint` |
 | Browser tests: first-time setup | `cd tests/eShopMvc.E2ETests; npm ci; npx playwright install chromium` (same Node as the client; the browser goes to the user profile's `ms-playwright` cache) |
 | Browser tests (new app must be running, React client built first) | `cd tests/eShopMvc.E2ETests; npm test` (uses `ESHOP_BASE_URL`, default http://localhost:5070; one file: `npm test -- tests/list.spec.ts`) |
@@ -87,7 +87,9 @@ Integration tests use `$env:ESHOP_TEST_DB` (a full connection string), default L
 Smoke tests (`tests/eShopMvc.SmokeTests`, xUnit v3) call a running app over HTTP.
 `ESHOP_BASE_URL` defaults to http://localhost:5050; `ESHOP_TARGET` (`legacy`|`new`, default
 `legacy`) selects the expected result where a Decision changes behavior. Tests create and delete
-their own `smoke-*` items and never modify seeded data. `global.json` opts `dotnet test` into
+their own `smoke-*` items and never modify seeded data. The HTML tests of the catalog pages
+(`Catalog/`) run only against legacy; the new app's pages are React (phase 2 cutover, P2-9), so there
+the suite uses the JSON API and checks the page shell, and the browser tests cover the pages. `global.json` opts `dotnet test` into
 Microsoft.Testing.Platform (required by xUnit v3 on the .NET 10 SDK). Any new test project must use a framework that supports it (e.g. xUnit v3).
 In MTP mode `dotnet test` takes no path argument; pass `--project <dir or .csproj>` (as above).
 Browser tests (`tests/eShopMvc.E2ETests`, Playwright, Chromium) drive the React UI of a running new app.
@@ -113,7 +115,7 @@ startup is logged as Critical (server and database, never the password) and stop
 | `<globalization culture="en-US">` | Code, `UseRequestLocalization` (R-12); deliberately not configurable | none |
 | `<sessionState mode="InProc">` | Code, `AddSession` (in-memory, 20 min) (R-11) | none |
 | `compilation debug` / Web.Release.config | Environment: Development = developer exception page; otherwise error page + HSTS | `ASPNETCORE_ENVIRONMENT` |
-| `log4Net.xml` | `Logging` section (levels, console formatter) | `Logging__LogLevel__<Category>`, `Logging__Console__FormatterName` |
+| `log4Net.xml` | `Logging` section (levels, console formatter). Page views: the API's log lines carry `Page` (the React page that made the call, from the client's `X-Client-Page` header; P2-19) | `Logging__LogLevel__<Category>`, `Logging__Console__FormatterName` |
 | `ApplicationInsights.config` | Dropped (R-26) | none |
 | *(new)* `AllowedHosts` | `*` (template default); may be restricted for Azure | `AllowedHosts` |
 | *(new)* listening URL | launchSettings.json, port 5070 (Development only); container: 8080 (image default), published as host port 5080 | `ASPNETCORE_HTTP_PORTS` or `ASPNETCORE_URLS` |

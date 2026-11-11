@@ -9,7 +9,7 @@ public sealed class DetailsTests
 {
     private const int MissingId = int.MaxValue;
 
-    [Theory]
+    [Theory(Skip = "Razor UI: legacy only since the cutover (P2-9)", SkipUnless = nameof(SmokeSettings.IsLegacy), SkipType = typeof(SmokeSettings))]
     [InlineData("Details")]
     [InlineData("Edit")]
     [InlineData("Delete")]
@@ -22,7 +22,7 @@ public sealed class DetailsTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    [Theory]
+    [Theory(Skip = "Razor UI: legacy only since the cutover (P2-9)", SkipUnless = nameof(SmokeSettings.IsLegacy), SkipType = typeof(SmokeSettings))]
     [InlineData("Details")]
     [InlineData("Edit")]
     [InlineData("Delete")]
@@ -35,7 +35,7 @@ public sealed class DetailsTests
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    [Fact]
+    [Fact(Skip = "Razor UI: legacy only since the cutover (P2-9)", SkipUnless = nameof(SmokeSettings.IsLegacy), SkipType = typeof(SmokeSettings))]
     public async Task Details_ShowsItemValuesPictureAndEditLink()
     {
         using var client = new AppClient();

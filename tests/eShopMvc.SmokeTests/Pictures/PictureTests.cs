@@ -13,12 +13,23 @@ public sealed class PictureTests
     public async Task Picture_OfListedItem_HasContentTypeMatchingItsFileName()
     {
         using var client = new AppClient();
-        var row = CatalogUi.Rows(await client.GetPageAsync("/Catalog/Index?pageSize=1&pageIndex=0")).Single();
+        // The picture URL and file name of the first item, as the list shows them (new app: the list's API, P2-12).
+        string pictureUrl, pictureFileName;
+        if (SmokeSettings.IsNew)
+        {
+            var item = (await CatalogApi.AllItemsAsync(client))[0];
+            (pictureUrl, pictureFileName) = (item.PictureUri, item.PictureFileName);
+        }
+        else
+        {
+            var row = CatalogUi.Rows(await client.GetPageAsync("/Catalog/Index?pageSize=1&pageIndex=0")).Single();
+            (pictureUrl, pictureFileName) = (row.ThumbnailSrc, row.PictureFileName);
+        }
 
-        using var response = await client.GetAsync(row.ThumbnailSrc);
+        using var response = await client.GetAsync(pictureUrl);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var expected = ExpectedMediaType(Path.GetExtension(row.PictureFileName));
+        var expected = ExpectedMediaType(Path.GetExtension(pictureFileName));
         Assert.Equal(expected, response.Content.Headers.ContentType?.MediaType);
         var body = await response.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
         Assert.NotEmpty(body);
