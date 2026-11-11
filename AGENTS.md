@@ -4,6 +4,10 @@
 Modernize the **eShopLegacyMVC** app (ASP.NET MVC 5, .NET Framework 4.x) in phases.
 See "Phases" below.
 
+Target stack, reached with phase 2: a React UI (Vite, TypeScript) served by an ASP.NET Core app
+(.NET 10) that provides the JSON API (`/api/v1/…`), the pictures and the health checks; EF Core on
+SQL Server; one Linux container. The only Razor view left is the error page.
+
 ## Repository layout
 ```
 eShopMvc/
@@ -14,7 +18,7 @@ eShopMvc/
   tests/eShopMvc.E2ETests/         browser tests of the React UI (Playwright, npm project; not in eShopMvc.slnx)
   tests/eShopMvc.Web.UnitTests/    unit tests for src/eShopMvc.Web (no running app, no database)
   tests/eShopMvc.Web.IntegrationTests/  database tests (own LocalDB test database; see D11)
-  docs/                            assessment.md (step 1), parity.md (step 9)
+  docs/                            assessment.md (phase 1 step 1), parity.md (legacy vs new app; "Phase 2": Razor UI vs React UI)
   docs/agents/                     phase documents (phase-01-port.md, phase-02-react.md); see "Current phase"
   eShopMvc.slnx                    the only solution: web app + test projects
   dotnet-tools.json                local tools (dotnet-ef 10.0.13, libman 3.0.114); `dotnet tool restore`
@@ -51,7 +55,7 @@ eShopMvc/
 | Restore local tools (once) | `dotnet tool restore` |
 | Add an EF Core migration | `dotnet ef migrations add <Name> --project src/eShopMvc.Web` |
 | Drop the new app's database | `dotnet ef database drop --project src/eShopMvc.Web` |
-| Update a client library (R-17) | `cd src/eShopMvc.Web; dotnet libman update <name> --to <version>` (e.g. `jquery --to 3.7.2`), then commit `libman.json` and `wwwroot/lib` |
+| Update a client library (R-17) | `cd src/eShopMvc.Web; dotnet libman update <name> --to <version>` (the only library left since the phase 2 cutover is `bootstrap`, CSS only), then commit `libman.json` and `wwwroot/lib` |
 | Re-download client libraries | `cd src/eShopMvc.Web; dotnet libman restore` (only needed if `wwwroot/lib` was deleted) |
 | Health checks (app running) | `curl http://localhost:5070/health/live` (no dependencies), `curl http://localhost:5070/health/ready` (database in database mode); `Healthy` 200 or `Unhealthy` 503 |
 | Show EF Core SQL commands | `$env:Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command='Information'; dotnet run --project src/eShopMvc.Web` |
@@ -130,9 +134,10 @@ command-line arguments (`--Catalog:UseMockData=true`) override both. Category na
 ## Phases
 - Phase 1 (complete): port to ASP.NET Core MVC on .NET 10.
   See `docs/agents/phase-01-port.md`.
-- Phase 2 (current): replace the Razor UI with React.
-  See `docs/agents/phase-02-react.md`.
+- Phase 2 (complete, 2026-11-10): replace the Razor UI with React.
+  See `docs/agents/phase-02-react.md`; results in `docs/parity.md`, "Phase 2".
 
 ## Current phase
-Before starting any task, read the current phase document named
-above and follow it. Earlier phase documents are reference only.
+No phase is in progress. Before starting any task, read both phase documents for the decisions
+that apply (R-*, D*, L* in phase 1; P2-* in phase 2) and keep to them; a new phase gets its own
+document under `docs/agents/` and is named here.

@@ -16,31 +16,46 @@ describe('validate', () => {
     expect(validate(values({ Name: name }))).toEqual({ Name: 'The Name field is required.' })
   })
 
-  it.each(['0', '19.5', '19.50', '1.', '.5', ' 7 ', '-1', '1.999', '2000000'])(
-    'leaves the price "%s" to the server',
+  // What the Razor forms' jQuery validation answered for the same input (compared in step 10).
+  it.each(['0', '19.5', '19.50', '007', '1000000', '1000000.00'])('accepts the price "%s"', (price) => {
+    expect(validate(values({ Price: price }))).toEqual({})
+  })
+
+  it.each(['abc', '1,000', '1,5', '1e3', '$5', '-1', '.5', '1.999', ' 7 ', ' '])(
+    'rejects the price "%s" for its format',
     (price) => {
-      expect(validate(values({ Price: price }))).toEqual({})
+      expect(validate(values({ Price: price }))).toEqual({
+        Price: 'The field Price must be a positive number with maximum two decimals.',
+      })
     },
   )
 
-  it.each(['abc', '1,5', '1e3', '$5', '1.2.3', '-', '.'])('rejects the price "%s" as not a number', (price) => {
+  it.each(['12.', '1.2.3'])('rejects the price "%s", which has the format, as not a number', (price) => {
     expect(validate(values({ Price: price }))).toEqual({ Price: 'The field Price must be a number.' })
   })
 
-  it('requires a price', () => {
-    expect(validate(values({ Price: ' ' }))).toEqual({ Price: 'The Price field is required.' })
+  it.each(['1000000.01', '2000000', '99999999999'])('rejects the price "%s" as out of range', (price) => {
+    expect(validate(values({ Price: price }))).toEqual({ Price: 'The field Price must be between 0 and 1000000.' })
   })
 
-  it('requires whole numbers in the stock fields, with their display names', () => {
-    expect(validate(values({ AvailableStock: '', RestockThreshold: '1.5', MaxStockThreshold: 'x' }))).toEqual({
+  it('requires a price', () => {
+    expect(validate(values({ Price: '' }))).toEqual({ Price: 'The Price field is required.' })
+  })
+
+  it('requires numbers in range in the stock fields, with their display names', () => {
+    expect(validate(values({ AvailableStock: '', RestockThreshold: 'x', MaxStockThreshold: '-1' }))).toEqual({
       AvailableStock: 'The Stock field is required.',
       RestockThreshold: 'The field Restock must be a number.',
-      MaxStockThreshold: 'The field Max stock must be a number.',
+      MaxStockThreshold: 'The field Max stock must be between 0 and 10 million.',
+    })
+    expect(validate(values({ AvailableStock: '10000001', RestockThreshold: '99999999999', MaxStockThreshold: '10000000' }))).toEqual({
+      AvailableStock: 'The field Stock must be between 0 and 10 million.',
+      RestockThreshold: 'The field Restock must be between 0 and 10 million.',
     })
   })
 
-  it('leaves stock ranges to the server', () => {
-    expect(validate(values({ AvailableStock: '-1', MaxStockThreshold: '99999999999' }))).toEqual({})
+  it('leaves a stock that is not whole to the server, as the Razor form did', () => {
+    expect(validate(values({ AvailableStock: '1.5' }))).toEqual({})
   })
 })
 

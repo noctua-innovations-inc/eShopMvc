@@ -184,6 +184,25 @@ public sealed class CatalogApiTests(MockModeAppFactory factory) : IClassFixture<
         Assert.Equal("The field Stock must be between 0 and 10 million.", Assert.Single(errors["AvailableStock"]));
     }
 
+    [Theory]
+    [InlineData("1000000.4")]
+    [InlineData("2147483648")]
+    [InlineData("99999999999")]
+    public async Task Create_PriceAboveTheRange_Returns400WithTheRangeMessage_NotA500(string price)
+    {
+        // Decision P2-20 (legacy's int range: 500 above int.MaxValue, 1000000.4 accepted).
+        using var client = factory.CreateRawClient();
+        var token = await GetXsrfTokenAsync(client);
+        var item = Item(name: "too-expensive");
+        item["Price"] = decimal.Parse(price, System.Globalization.CultureInfo.InvariantCulture);
+
+        using var response = await SendAsync(client, HttpMethod.Post, Items, token, item);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var errors = await ReadErrorsAsync(response);
+        Assert.Equal("The field Price must be between 0 and 1000000.", Assert.Single(Assert.Single(errors).Value));
+    }
+
     [Fact]
     public async Task Create_UnknownBrandAndType_Returns400FieldErrors()
     {

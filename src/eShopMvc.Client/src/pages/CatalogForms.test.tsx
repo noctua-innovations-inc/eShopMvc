@@ -84,7 +84,7 @@ describe('Create page', () => {
     })
   })
 
-  it('checks the name and the numbers before sending anything (P2-16)', async () => {
+  it('checks what the Razor form checked before sending anything, and goes to the first wrong field (P2-16)', async () => {
     const fetchMock = stubFetch(listRoutes)
     const user = userEvent.setup()
 
@@ -92,14 +92,47 @@ describe('Create page', () => {
     await user.clear(await screen.findByLabelText('Price'))
     await user.type(screen.getByLabelText('Price'), 'abc')
     await user.clear(screen.getByLabelText('Restock'))
+    await user.clear(screen.getByLabelText('Max stock'))
+    await user.type(screen.getByLabelText('Max stock'), '10000001')
     await user.click(screen.getByRole('button', { name: '[ Create ]' }))
 
     expect(fieldError('Name')).toBe('The Name field is required.')
-    expect(fieldError('Price')).toBe('The field Price must be a number.')
+    expect(fieldError('Price')).toBe('The field Price must be a positive number with maximum two decimals.')
     expect(fieldError('RestockThreshold')).toBe('The Restock field is required.')
+    expect(fieldError('MaxStockThreshold')).toBe('The field Max stock must be between 0 and 10 million.')
     expect(fieldError('AvailableStock')).toBe('')
     expect(screen.getByLabelText('Price')).toHaveClass('input-validation-error')
+    expect(screen.getByLabelText('Name')).toHaveFocus()
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toEqual([])
+  })
+
+  it('changes or removes a message while its field is corrected, and checks other fields only on save (P2-16)', async () => {
+    stubFetch(listRoutes)
+    const user = userEvent.setup()
+
+    renderApp('/Catalog/Create')
+    await user.clear(await screen.findByLabelText('Price'))
+    await user.click(screen.getByRole('button', { name: '[ Create ]' }))
+    expect(fieldError('Name')).toBe('The Name field is required.')
+    expect(fieldError('Price')).toBe('The Price field is required.')
+
+    await user.type(screen.getByLabelText('Name'), 'M')
+    expect(fieldError('Name')).toBe('')
+    expect(screen.getByLabelText('Name')).not.toHaveClass('input-validation-error')
+
+    await user.type(screen.getByLabelText('Price'), 'x')
+    expect(fieldError('Price')).toBe('The field Price must be a positive number with maximum two decimals.')
+    await user.clear(screen.getByLabelText('Price'))
+    expect(fieldError('Price')).toBe('The Price field is required.')
+    await user.type(screen.getByLabelText('Price'), '5')
+    expect(fieldError('Price')).toBe('')
+    // Without a message the field is no longer checked until the next save.
+    await user.type(screen.getByLabelText('Price'), 'x')
+    expect(fieldError('Price')).toBe('')
+
+    // No message yet: not checked while typing.
+    await user.clear(screen.getByLabelText('Stock'))
+    expect(fieldError('AvailableStock')).toBe('')
   })
 
   it("shows the server's messages at their fields and keeps the entered values", async () => {
@@ -117,7 +150,7 @@ describe('Create page', () => {
     renderApp('/Catalog/Create')
     await user.type(await screen.findByLabelText('Name'), 'New mug')
     await user.clear(screen.getByLabelText('Price'))
-    await user.type(screen.getByLabelText('Price'), '1.999')
+    await user.type(screen.getByLabelText('Price'), '12.50')
     await user.click(screen.getByRole('button', { name: '[ Create ]' }))
 
     expect(await screen.findByText('The field Stock must be between 0 and 10 million.')).toBeInTheDocument()
@@ -126,8 +159,34 @@ describe('Create page', () => {
     expect(screen.getByText(/The field Picture name must be a file name/)).toHaveClass('field-validation-error')
     expect(fieldError('Name')).toBe('')
     expect(screen.getByLabelText('Name')).toHaveValue('New mug')
-    expect(screen.getByLabelText('Price')).toHaveValue('1.999')
+    expect(screen.getByLabelText('Price')).toHaveValue('12.50')
     expect(screen.getByRole('button', { name: '[ Create ]' })).toBeEnabled()
+    expect(screen.getByLabelText('Brand')).toHaveFocus() // the first field with a message
+
+    // The browser can't check the brand; choosing another one takes the server's message away.
+    await user.selectOptions(screen.getByLabelText('Brand'), '.NET')
+    expect(fieldError('CatalogBrandId')).toBe('')
+  })
+
+  it("leaves a stock that isn't whole to the server and shows MVC's message for it, as the Razor form did", async () => {
+    const fetchMock = stubFetch({
+      ...listRoutes,
+      [`POST ${items}`]: validationProblem({
+        input: ['The input field is required.'],
+        '$.AvailableStock': ['The JSON value could not be converted to System.Int32. Path: $.AvailableStock'],
+      }),
+    })
+    const user = userEvent.setup()
+
+    renderApp('/Catalog/Create')
+    await user.type(await screen.findByLabelText('Name'), 'New mug')
+    await user.clear(screen.getByLabelText('Stock'))
+    await user.type(screen.getByLabelText('Stock'), '1.5')
+    await user.click(screen.getByRole('button', { name: '[ Create ]' }))
+
+    expect(await screen.findByText("The value '1.5' is not valid for Stock.")).toBeInTheDocument()
+    expect(sentRequest(fetchMock, 'POST').body).toMatchObject({ AvailableStock: 1.5 })
+    expect(screen.getByLabelText('Stock')).toHaveFocus()
   })
 
   it.each([

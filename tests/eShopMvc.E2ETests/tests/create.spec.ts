@@ -22,13 +22,19 @@ test.describe('Create page', () => {
     await page.goto(app('/Catalog/Create'))
     const create = page.getByRole('button', { name: '[ Create ]' })
 
-    // Checked in the browser (P2-16): nothing is sent.
+    // Checked in the browser, as the Razor form did (P2-16): nothing is sent, the cursor goes to the field.
+    let posts = 0
+    page.on('request', (sent) => {
+      posts += sent.method() === 'POST' ? 1 : 0
+    })
     await create.click()
     await expect(page.locator('#Name + span')).toHaveText('The Name field is required.')
-    expect(await findByName(request, newName)).toBeNull()
+    await expect(field(page, 'Name')).toBeFocused()
 
-    // Checked by the server.
-    await field(page, 'Name').fill(newName)
+    // The message goes while the field is corrected.
+    await field(page, 'Name').pressSequentially(newName)
+    await expect(page.locator('#Name + span')).toHaveText('')
+
     await field(page, 'Description').fill('Created through the form')
     await field(page, 'Price').fill('1.999')
     await field(page, 'Stock').fill('-1')
@@ -37,8 +43,27 @@ test.describe('Create page', () => {
       'The field Price must be a positive number with maximum two decimals.',
     )
     await expect(page.locator('#AvailableStock + span')).toHaveText('The field Stock must be between 0 and 10 million.')
-    await expect(page.locator('#Name + span')).toHaveText('')
+    await expect(field(page, 'Price')).toBeFocused()
+
+    for (const [price, message] of [
+      ['abc', 'The field Price must be a positive number with maximum two decimals.'],
+      ['12.', 'The field Price must be a number.'],
+      ['99999999999', 'The field Price must be between 0 and 1000000.'],
+    ]) {
+      await field(page, 'Price').fill(price)
+      await create.click()
+      await expect(page.locator('#Price + span')).toHaveText(message)
+    }
+    expect(posts).toBe(0)
+
+    // Checked by the server only: a stock that isn't a whole number.
+    await field(page, 'Price').fill('12.34')
+    await field(page, 'Stock').fill('1.5')
+    await create.click()
+    await expect(page.locator('#AvailableStock + span')).toHaveText("The value '1.5' is not valid for Stock.")
+    await expect(field(page, 'Stock')).toBeFocused()
     await expect(field(page, 'Name')).toHaveValue(newName)
+    expect(posts).toBe(1)
     expect(await findByName(request, newName)).toBeNull()
 
     // Valid: saved, then the list.

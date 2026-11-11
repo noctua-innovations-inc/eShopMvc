@@ -53,7 +53,7 @@ test.describe('Edit page', () => {
     ])
   })
 
-  test("shows the server's message and keeps the item unchanged", async ({ page, request, item }) => {
+  test('shows the message for a price out of range and keeps the item unchanged', async ({ page, request, item }) => {
     await page.goto(app(`/Catalog/Edit/${item.Id}`))
     await field(page, 'Price').fill('2000000')
     await page.getByRole('button', { name: '[ Save ]' }).click()

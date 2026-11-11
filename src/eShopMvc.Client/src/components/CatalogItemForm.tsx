@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { ApiError, createCatalogItem, updateCatalogItem } from '../api.ts'
 import type { CatalogBrand, CatalogItem, CatalogType } from '../api.ts'
-import { itemValues, labels, newItemValues, sortServerErrors, toInput, validate } from '../catalogItemForm.ts'
+import { fieldOrder, itemValues, labels, newItemValues, sortServerErrors, toInput, validate } from '../catalogItemForm.ts'
 import type { FieldErrors, FieldName, FormValues } from '../catalogItemForm.ts'
 import { itemNotFound } from '../hooks.ts'
 
@@ -25,8 +25,31 @@ export function CatalogItemForm({ item, brands, types }: Props) {
   const [summary, setSummary] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
 
+  const form = useRef<HTMLFormElement>(null)
+
+  // Decision P2-16: a message goes (or changes) as soon as its field is corrected, as with the Razor
+  // UI's jQuery validation; a field without a message is only checked on save.
   function set(field: FieldName, value: string) {
-    setValues((current) => ({ ...current, [field]: value }))
+    const next = { ...values, [field]: value }
+    setValues(next)
+    if (errors[field]) {
+      const others = { ...errors }
+      delete others[field]
+      const message = validate(next)[field]
+      setErrors(message ? { ...others, [field]: message } : others)
+    }
+  }
+
+  // Decision P2-16: after a failed save the cursor goes to the first field with a message.
+  function showErrors(fieldErrors: FieldErrors) {
+    setErrors(fieldErrors)
+    for (const field of fieldOrder) {
+      const control = fieldErrors[field] ? form.current?.querySelector<HTMLElement>(`#${field}`) : null
+      if (control) {
+        control.focus()
+        break
+      }
+    }
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -38,7 +61,7 @@ export function CatalogItemForm({ item, brands, types }: Props) {
       CatalogTypeId: values.CatalogTypeId || String(types[0]?.Id ?? ''),
     }
     const clientErrors = validate(current)
-    setErrors(clientErrors)
+    showErrors(clientErrors)
     setSummary([])
     if (Object.keys(clientErrors).length > 0) {
       return
@@ -56,7 +79,7 @@ export function CatalogItemForm({ item, brands, types }: Props) {
       setSaving(false)
       const sorted = error instanceof ApiError && error.errors ? sortServerErrors(error.errors, current) : null
       if (sorted && (Object.keys(sorted.fields).length > 0 || sorted.summary.length > 0)) {
-        setErrors(sorted.fields)
+        showErrors(sorted.fields)
         setSummary(sorted.summary)
       } else if (error instanceof ApiError && error.status === 404 && editing) {
         setSummary([itemNotFound]) // deleted in the meantime
@@ -191,7 +214,7 @@ export function CatalogItemForm({ item, brands, types }: Props) {
 
   return (
     // noValidate: the messages are the form's own, as with the Razor UI's jQuery validation.
-    <form method="post" noValidate onSubmit={(event) => void handleSubmit(event)}>
+    <form ref={form} method="post" noValidate onSubmit={(event) => void handleSubmit(event)}>
       {item ? (
         <div className="container">
           <div className="row">

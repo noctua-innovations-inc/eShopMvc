@@ -22,7 +22,9 @@ public class CatalogItem
 
     // decimal(18,2)
     [RegularExpression(@"^\d+(\.\d{0,2})*$", ErrorMessage = "The field Price must be a positive number with maximum two decimals.")]
-    [Range(0, 1000000)]
+    // Decision P2-20: a decimal range. Legacy's [Range(0, 1000000)] converts the price to an int first,
+    // which throws (500) above int.MaxValue and rounds 1000000.4 into the range.
+    [Range(typeof(decimal), "0", "1000000", ParseLimitsInInvariantCulture = true)]
     [DataType(DataType.Currency)]
     public decimal Price { get; set; }
 

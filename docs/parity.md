@@ -1,5 +1,11 @@
 # Parity: eShopLegacyMVC → eShopMvc.Web
 
+> **Phase 2 (2026-11-10):** the Razor pages described below were replaced by a React UI. The
+> comparison of the two is in [Phase 2: Razor UI → React UI](#phase-2-razor-ui--react-ui) at the end.
+> Everything before that section is the phase 1 record, kept as written: test names and counts in it
+> are those of 2026-10-18, and some of those tests no longer exist (the phase 2 section says what
+> replaced them).
+
 Status as of **2026-10-18**, commit **`5f9a1ea`** (Step 8) plus the step-9 changes (this document,
 AGENTS.md, and integration tests only; no application code). The legacy app runs in database mode
 (LocalDB, Decision R-2); the new app runs in database mode against its own LocalDB database
@@ -131,3 +137,111 @@ database (same creation date, "No migrations were applied"); `down -v` started f
 | **Data Protection keys** | **Compose: done (D-H):** named volume `dataprotection-keys`; a form opened before `down`/`up` still submits (302), and fails with 400 when the volume is removed. Keys are unencrypted, so the "No XML encryptor configured" warning is expected. **Azure: open:** shared, encrypted key store (e.g. Blob Storage + Key Vault; packages needed) so tokens work across restarts and replicas |
 | Session across restarts | Session *contents* are lost when the app restarts (in-memory cache, R-11), as with legacy InProc session. **Azure: open** together with scale-out: shared session store (needs a package) or sticky sessions |
 | Footer clock (difference) | Legacy printed the server's local time; containers print UTC unless `TZ` is set. Deployment setting, not code |
+
+## Phase 2: Razor UI → React UI
+
+Status as of **2026-11-10**, branch `react-ui`. The Razor UI is the last commit before the cutover,
+tag **`phase2-pre-cutover`** (`b3243f8`); the React UI is the commit that adds this section. Decision
+IDs P2-* refer to `docs/agents/phase-02-react.md`. The server keeps the JSON API, the pictures, the
+health checks and the error page; every catalog page is now a React page at its old URL.
+
+### What was compared, and how
+
+Both UIs ran side by side in mock mode (same 12 items, no database): the Razor UI from a temporary
+worktree of the tag on port 5072, the React UI on port 5071. One-off Playwright scripts (Chromium)
+did the comparing; they are not in the repository because they need that worktree. To repeat:
+`git worktree add <dir> phase2-pre-cutover`, run both with
+`-- --Catalog:UseMockData=true --urls http://localhost:<port>`, and compare as described here.
+
+| Check | How | Result |
+|---|---|---|
+| Pages at rest | Every rendered element (tag, classes, position and size to 0.1 px, own text, colour, background, font size and weight, opacity, display, field value) and the document title of: list, list `?pageSize=5&pageIndex=1`, list `pageIndex=2` (short last page), Details, Delete, Edit, Create; at widths 1280, 1920, 800 and 400 | **0 differences** in all 28 comparisons (43 to 202 elements each). Ignored: the footer's start time (two apps, two sessions) and the Razor Create view's empty trailing `<div>` |
+| Form behaviour | 25 scenarios on Create and Edit (empty, malformed, out-of-range and unreadable values; valid save; delete; cancel): landing URL, title, messages, focused element, then every element as above | Messages, landing URLs and layout **identical** after the fixes below; focus differs in 6 scenarios (deliberate, P2-16) |
+| Error URLs | 14 URLs (unknown and malformed ids, invalid paging, unknown paths, old URL forms): status code and what is on screen | Differences are exactly the decided ones (P2-9, P2-14, P2-15), listed below |
+| Legacy cross-check | Full-page screenshots at 1280 px of the same six pages from the legacy app (port 5050, database mode) and the React UI, compared pixel by pixel (footer text hidden: machine and time differ) | **Pixel-identical**, all six |
+| Behaviour through HTTP | Smoke tests against legacy, the new app and the container | Table below |
+| Browser flows | `tests/eShopMvc.E2ETests` (Playwright): list and paging, details, create, edit, delete, shell, footer | 28 of 28 on ports 5070, 5071 (mock) and 5080 (container) |
+
+**Found and fixed by the comparison** (all in this commit):
+
+| Input on Create/Edit | Razor UI | React UI before | Now |
+|---|---|---|---|
+| Price `abc`, `1,000` | "…positive number with maximum two decimals." | "The field Price must be a number." | As Razor |
+| Price `12.` | "The field Price must be a number." | Saved as 12 | As Razor |
+| Price `99999999999` | "The field Price must be between 0 and 1000000." | "The catalog item could not be saved." (API 500) | As Razor; API answers 400 (P2-20) |
+| Stock `99999999999` | "The field Stock must be between 0 and 10 million." | "The value '99999999999' is not valid for Stock." | As Razor |
+| Stock `1.5` | "The value '1.5' is not valid for Stock." (server) | "The field Stock must be a number." | As Razor |
+
+One run of the at-rest comparison showed the Razor reference's brand image as broken at three widths
+right after that instance had started; the image answered 200 and the repeated run was clean at all
+four widths. Recorded here because it was not explained.
+
+### Test results (2026-11-10)
+
+| Suite | Target | Passed | Failed | Skipped |
+|---|---|---|---|---|
+| Unit (`tests/eShopMvc.Web.UnitTests`) | none | 169 | 0 | 0 |
+| Integration (`tests/eShopMvc.Web.IntegrationTests`) | none | 101 | 0 | 0 |
+| Vitest (`src/eShopMvc.Client`) | none | 81 | 0 | 0 |
+| Smoke | New app, database mode, port 5070 | 37 | 0 | 29 (legacy-only) |
+| Smoke | Container, port 5080 | 37 | 0 | 29 (legacy-only) |
+| Smoke | Legacy app, port 5050 | 40 | 0 | 26 (new-only) |
+| Browser (`tests/eShopMvc.E2ETests`) | New app 5070; mock 5071; container 5080 | 28 | 0 | 0 |
+
+The 25 HTML tests of the catalog pages (`tests/eShopMvc.SmokeTests/Catalog`) run only against legacy
+since the cutover; against the new app the JSON API tests, `ReactShellTests` and the browser tests
+cover the same behaviour.
+
+### Deliberate differences (React vs Razor)
+
+| ID | Difference | Why | Test |
+|---|---|---|---|
+| P2-9 | A page URL with an unknown or malformed id, or invalid paging, answers **200 with the shell**; React shows the message (Razor: empty 404 / 400). The API still answers 404 / 400 | The pages are static files; checking first would put page logic and a database call in front of them | Integration `SpaFallbackTests.*`; Smoke `ReactShellTests.PageRoutes_*`; Browser `details.spec.ts`, `list.spec.ts` |
+| P2-14 | Invalid paging: "Invalid paging values." in place of the table. `?pageSize=abc` shows it too (Razor fell back to the default page size) | The page URL's values go to the API unchanged; the server alone decides | Vitest `App.test.tsx`; Browser `list.spec.ts` "says so for invalid paging values" |
+| P2-15 | Unknown item on Details, Edit, Delete: "The catalog item was not found." with "Back to List"; a failed delete stays on the page with a message | Razor showed an empty error page | Vitest `CatalogItemPages.test.tsx`, `CatalogForms.test.tsx`; Browser `details.spec.ts`, `edit.spec.ts`, `delete.spec.ts` |
+| P2-9 | **404 now:** `/Catalog/Details?id=1` (id in the query string), `/Catalog/{Details,Edit,Delete}` without an id (Razor: 400), extra segments (`/Catalog/Create/5`), every `/app/…` URL of the side-by-side period | Only the seven page routes are answered; no link produces the others | Integration `SpaFallbackTests.EverythingButThePageRoutes_IsNotFound`; Smoke `ReactShellTests.OtherUrls_AreNotFound` |
+| P2-9 | `POST` to the Razor form URLs answers **405** | Only the API writes data | Integration `SpaFallbackTests.FormPostsOfTheRazorUi_AreNoLongerAccepted`; Smoke `ReactShellTests.RazorFormPost_IsNoLongerAccepted` |
+| P2-9 | Without a client build the page routes are 404 (`dotnet run` alone shows no pages) | `dotnet build` does not run npm (P2-2); the container image builds the client | Integration `SpaFallbackTests.PageRoutes_ReturnTheShellIfBuilt_AndStartNoSession` |
+| P2-16 | A failed save that is not a validation error (500, network, rejected token) stays on the form with the entered values and "The catalog item could not be saved." (Razor: error page, values lost) | No page reload in React | Vitest `CatalogForms.test.tsx` "stays on the form and says so after…" |
+| P2-16 | **Focus** after a failed save: the first field with a message (Razor: the last-edited invalid field; none after a server-rendered message) | Simpler and predictable | Vitest `CatalogForms.test.tsx`; Browser `create.spec.ts` |
+| P2-16 | **Timing:** a message changes or goes while its field is corrected; fields without a message are checked on save only (Razor also checked on leaving a field, and every field while typing after a failed submit) | Razor's check-on-leave moved the button from under the mouse, so a first click on "Create" could be swallowed | Vitest `CatalogForms.test.tsx` "changes or removes a message…"; Browser `create.spec.ts` |
+| P2-17 | Editing an item keeps its `OnReorder` (the Razor Edit form reset it to false) | Not on the form; the stored value is sent back | Vitest `CatalogForms.test.tsx` "sends the stored OnReorder back…" |
+| P2-19 | Page views in the log: the API's "Now loading…" lines carry `Page` (from the client's `X-Client-Page` header) instead of one "Now loading... /Catalog/…" line per page | Pages are static files; navigation inside the app asks the server for no page | Unit `ClientPageLoggingScopeMiddlewareTests.*`; Vitest `pageHeader.test.tsx`; Browser `shell.spec.ts` |
+| P2-20 | Price above `int.MaxValue`: 400 with the range message (was 500); `1000000.4` rejected (was rounded and accepted) | Range checked as a decimal | Unit `CatalogItemValidationTests.*`; Integration `CatalogApiTests.Create_PriceAboveTheRange_*` |
+| P2-7 | Antiforgery token in the `X-XSRF-TOKEN` header, from the `XSRF-TOKEN` cookie (Razor: hidden form field) | JSON requests have no form field | Integration and Smoke `CatalogApiTests.*`; Vitest `CatalogForms.test.tsx` |
+| P2-8 | The footer's values come from `GET /api/v1/session`, which starts the session (Razor: any page did). Same text and format | The shell is a static file | Integration and Smoke `SessionApiTests.*`; Browser `shell.spec.ts` "Footer" |
+| P2-11 | jQuery, jQuery Validation and `bootstrap.min.js` are gone; the error page's layout has no scripts | React needs none of them | Integration `StaticAssetTests.ScriptsOfTheRazorUi_AreGone`, `ErrorPageTests.*` |
+
+### Known harmless differences
+
+- **Markup of a validation message:** jQuery Validation wrapped the text in an inner
+  `<span id="…-error">` and marked checked inputs with the class `valid`; React prints the text
+  directly and adds no `valid`. No style sheet uses either; position, size and colour are identical.
+- **Between pages:** Razor reloaded the whole document; React swaps the page content and keeps the
+  header and footer. While a list page loads, the previous one stays on screen (P2-14).
+- **Brief empty state:** the footer text and the page content appear a moment after the shell
+  (API calls); Razor delivered them in the HTML.
+- **`/app/index.html`** is still served as a static file and shows "Page not found." in the shell
+  (P2-18). No link leads there.
+- **Disabled save button:** React disables "[ Create ]"/"[ Save ]" while the request runs; Razor
+  did not, so a double click could post twice.
+
+### Preserved from the Razor UI (and through it from legacy)
+
+Same URLs, titles, labels and texts, including the kept quirks: the pager's "Showing {page size} of
+{total}" on a short last page and always-rendered Previous/Next (R-24), the Edit form's
+"CatalogBrandId"/"CatalogTypeId" labels (R-24), the banner fix (R-29), en-US prices whatever the
+browser language (R-12), `dummy.png` for new items, the read-only picture name on Edit, a 51-character
+name accepted by the form (mock mode stores it; the database column has 50).
+
+### Test gaps (deliberate)
+
+- **Chromium only** (P2-12); Firefox and WebKit were not run.
+- **Failed loads and saves** (500, network, rejected token) are covered by Vitest with a stubbed
+  `fetch`, not in a browser: they need a faulty server.
+- **Hover, active and transition styles** were not compared; only the styles of elements at rest and
+  after a submit (mouse moved away).
+- **The legacy cross-check** is at one width (1280 px) and at rest; legacy's form behaviour was not
+  re-compared (phase 1 established Razor = legacy there).
+- **The comparison scripts are not in the repository**; this section and P2-12 "Step 10" describe
+  the method.

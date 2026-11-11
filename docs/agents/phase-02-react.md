@@ -148,6 +148,23 @@ target for the UI; the smoke tests can still run against it.
   "The catalog item could not be saved." in the summary; a PUT answered 404 shows "The catalog item
   was not found." there. Edit for a missing item: as P2-15. Create shows "The catalog could not be
   loaded." if the brands or types can't be loaded. Vitest-tested.
+  - **Changed in step 10** (approved 2026-11-10, after the comparison with the Razor UI found five
+    inputs with a different message, one of them saved where Razor refused it): the browser checks
+    are now the ones jQuery Validation made on the Razor forms, in the same order and with the same
+    messages. Price: required; format `^\d+(\.\d{0,2})*$` ("…positive number with maximum two
+    decimals."); jQuery's "number" ("…must be a number.", reached by `12.` and `1.2.3`); range 0 to
+    1000000. Stock fields: required; number; range 0 to 10 million. Name: required. Still server
+    only: picture name (R-9), brand/type (P2-13) and values the server can't read (a stock of `1.5`
+    gets "The value '1.5' is not valid for Stock.", as it did with Razor). Also new:
+    - **Focus:** after a failed save (browser or server check) the cursor goes to the first field
+      with a message. jQuery Validation chose the last-edited invalid field, and no field after a
+      server-rendered message: deliberate difference.
+    - **Timing:** a field's message changes or goes while the field is corrected; a field without a
+      message is checked on save only. jQuery Validation also checked a changed field when it lost
+      focus and, after a failed submit, every field while typing: deliberate difference. Its
+      check-on-leave moved the button from under the mouse, so the first click on "Create" could be
+      swallowed; that is not copied.
+    Vitest- and browser-tested.
   - **Step 6:** `components/CatalogItemForm.tsx` (both forms; markup, ids, input types and start values
     copied from the HTML the Razor pages render, including Edit's "CatalogBrandId"/"CatalogTypeId"
     labels, R-24), rules and mapping in `catalogItemForm.ts`, `pages/CatalogCreate.tsx`,
@@ -180,6 +197,12 @@ target for the UI; the smoke tests can still run against it.
   those either). Rejected alternatives: a page-view endpoint (a new route anyone can call to write
   log lines) and logging when the shell is served (misses navigation inside the app). Unit-, Vitest-
   and browser-tested.
+- **P2-20 Price range checked as a decimal** (step 10, approved 2026-11-10): `CatalogItem.Price` has
+  `[Range(typeof(decimal), "0", "1000000")]` instead of legacy's `[Range(0, 1000000)]`. The int range
+  converted the price to an `int` first: a price above `int.MaxValue` threw an `OverflowException`
+  (500, on the API as on the Razor form post, where the browser check hid it), and `1000000.4` was
+  rounded into the range and accepted. Now both get 400 with "The field Price must be between 0 and
+  1000000." Unit- and integration-tested.
 - **P2-9 Cutover routes:** `/`, `/Catalog`, `/Catalog/Index`, `/Catalog/Details/{id}`,
   `/Catalog/Create`, `/Catalog/Edit/{id}` and `/Catalog/Delete/{id}` (same query strings, e.g.
   `?pageSize=…&pageIndex=…`) are served by a SPA fallback to `app/index.html` and matched by React
@@ -302,6 +325,14 @@ target for the UI; the smoke tests can still run against it.
     - `ErrorPageTests` and `ForwardedHeadersTests` now go through API URLs. Integration tests must
       not depend on the built client (git-ignored): `SpaFallbackTests` accepts the shell or a 404 for
       the page routes; the smoke tests assert the shell.
+  - **Step 10** (parity; results in `docs/parity.md`, "Phase 2"): the Razor UI was the tag
+    `phase2-pre-cutover` in a temporary worktree on port 5072, the React UI on port 5071, both in mock
+    mode. One-off Playwright scripts (not committed) compared: every rendered element of seven page
+    states at four widths; 25 form scenarios (landing URL, title, messages, focus, every element);
+    14 error URLs; and screenshots of six pages against the legacy app, pixel by pixel. The form
+    scenarios led to the step-10 change of P2-16 and to P2-20. Two things to know when repeating it:
+    the footer's start time differs between two apps (mask its text and width), and jQuery Validation
+    wraps a message in an inner `<span>` and marks checked inputs `valid` (ignore both).
 
 ## Open questions (ask when the step that needs them is reached)
 All answered at the cutover (2026-11-10):
@@ -354,6 +385,8 @@ All answered at the cutover (2026-11-10):
   http://localhost:5070 and the rebuilt container at http://localhost:5080: smoke vs new 37/0/29 of
   66 (29 legacy-only), browser 28/28; dev server pages and proxy checked at http://localhost:5173/;
   smoke vs legacy 40/0/26 of 66 (26 new-only))
-- [ ] Parity verified
+- [x] Parity verified (2026-11-10; `docs/parity.md`, "Phase 2". Unit 169/169, integration 101/101;
+  client build, 81/81 Vitest, lint clean; smoke vs new 37/0/29 of 66 on ports 5070 and 5080
+  (rebuilt container), vs legacy 40/0/26; browser 28/28 on ports 5070, 5071 (mock) and 5080)
 
 Update this checklist as steps complete.

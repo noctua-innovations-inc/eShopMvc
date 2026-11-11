@@ -63,10 +63,23 @@ export function itemValues(item: CatalogItem): FormValues {
   }
 }
 
+/** The form's fields from top to bottom: where the cursor goes after a failed save. */
+export const fieldOrder: readonly FieldName[] = [
+  'Name', 'Description', 'CatalogBrandId', 'CatalogTypeId', 'Price', 'PictureFileName',
+  'AvailableStock', 'RestockThreshold', 'MaxStockThreshold',
+]
+
+// The rules jQuery Validation applied to the Razor forms, from CatalogItem's annotations.
+const priceFormat = /^\d+(\.\d{0,2})*$/ // [RegularExpression]
+const jQueryNumber = /^(?:-?\d+|-?\d{1,3}(?:,\d{3})+)?(?:\.\d+)?$/ // jQuery Validation's "number"
+const priceMax = 1000000 // [Range(0, 1000000)]
+const stockMax = 10000000 // [Range(0, 10000000)]
+
 /**
- * The checks made before sending (P2-16): only that Name is there and that the number fields hold
- * numbers, which JSON needs. The messages are the Razor UI's. Ranges, decimals and the picture name
- * are the server's business.
+ * The checks made before sending (P2-16): the ones the Razor forms made in the browser, in the same
+ * order and with the same messages, so each input gets the message it got there. What the browser
+ * never checked stays the server's business: the picture name (R-9), brand and type (P2-13), and
+ * numbers the server can't read (a stock of 1.5).
  */
 export function validate(values: FormValues): FieldErrors {
   const errors: FieldErrors = {}
@@ -74,22 +87,33 @@ export function validate(values: FormValues): FieldErrors {
     errors.Name = required('Name')
   }
 
-  const price = values.Price.trim()
+  const price = values.Price
   if (price === '') {
     errors.Price = required('Price')
-  } else if (!/^-?(\d+\.?\d*|\.\d+)$/.test(price)) {
-    errors.Price = notANumber('Price')
+  } else if (!priceFormat.test(price)) {
+    errors.Price = 'The field Price must be a positive number with maximum two decimals.'
+  } else if (!jQueryNumber.test(price)) {
+    errors.Price = notANumber('Price') // "12." and "1.2.3" pass the format
+  } else if (!inRange(price, priceMax)) {
+    errors.Price = `The field Price must be between 0 and ${priceMax}.`
   }
 
   for (const field of integerFields) {
-    const value = values[field].trim()
+    const value = values[field]
     if (value === '') {
       errors[field] = required(field)
-    } else if (!/^-?\d+$/.test(value)) {
+    } else if (!jQueryNumber.test(value)) {
       errors[field] = notANumber(field)
+    } else if (!inRange(value, stockMax)) {
+      errors[field] = `The field ${labels[field]} must be between 0 and 10 million.`
     }
   }
   return errors
+}
+
+function inRange(value: string, max: number): boolean {
+  const number = Number(value)
+  return number >= 0 && number <= max
 }
 
 /**
