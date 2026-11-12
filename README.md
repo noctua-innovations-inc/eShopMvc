@@ -1,6 +1,6 @@
 # eShopMvc
 
-**A classic ASP.NET MVC 5 application, modernized in four weeks by an AI agent that was never allowed to guess.**
+**A classic ASP.NET MVC 5 application, modernized in a few hours by an AI agent that was never allowed to guess.**
 
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4) ![React 19](https://img.shields.io/badge/React-19-61DAFB) ![TypeScript](https://img.shields.io/badge/TypeScript-7-3178C6) ![SQL Server](https://img.shields.io/badge/SQL%20Server-2022-CC2927) ![Container](https://img.shields.io/badge/Linux-container-2496ED)
 
@@ -8,6 +8,10 @@ Most legacy-modernization stories end with "we rewrote it and it mostly works." 
 experiment: a small, real application, moved from .NET Framework to .NET 10 and from server-rendered Razor to a
 React UI, **entirely by [Claude Code](https://claude.com/claude-code)**, with a human setting the direction, approving
 every plan and making every judgement call, and with every deliberate behaviour change written down and tested.
+
+> **A note on time.** The commits span about four weeks of calendar time (October 13 to November 11, 2026), but the
+> actual hands-on effort was a few hours spread across that period. The dates in the git history show when sessions
+> happened, not how much work they took.
 
 The interesting part is not the app. It is the **method**, and the paper trail it left behind.
 
@@ -112,10 +116,10 @@ amended in writing.
 
 ```mermaid
 flowchart LR
-    S["Oct 13<br/>Baseline: legacy app<br/>committed untouched,<br/>agent rules written"]
-    P1["Phase 1: Port<br/>Oct 14-18<br/>Assessment, then ten steps:<br/>models, EF Core, controllers,<br/>views, config, logging,<br/>health checks, Linux container"]
-    P2["Phase 2: React<br/>Oct 28 - Nov 10<br/>JSON API, then React pages<br/>one by one, Playwright tests,<br/>cutover, parity check"]
-    P3["Phase 3: Grid<br/>Nov 11<br/>AG Grid list that fills the window,<br/>footer and session removed,<br/>one type scale, paging fixes"]
+    S["Baseline<br/>legacy app committed untouched,<br/>agent rules written"]
+    P1["Phase 1: Port<br/>Assessment, then ten steps:<br/>models, EF Core, controllers,<br/>views, config, logging,<br/>health checks, Linux container"]
+    P2["Phase 2: React<br/>JSON API, then React pages<br/>one by one, Playwright tests,<br/>cutover, parity check"]
+    P3["Phase 3: Grid<br/>AG Grid list that fills the window,<br/>footer and session removed,<br/>one type scale, paging fixes"]
     E["Today<br/>.NET 10 + React<br/>in one Linux container"]
 
     S --> P1 --> P2 --> P3 --> E
