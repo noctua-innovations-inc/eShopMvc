@@ -15,6 +15,7 @@ public sealed class SpaFallbackTests(MockModeAppFactory factory) : IClassFixture
     [InlineData("/app/assets/missing.js")]
     [InlineData("/app/missing.css")]
     [InlineData("/api/v1/nope")]
+    [InlineData("/api/v1/session")] // removed with the footer (P3-7)
     [InlineData("/api/v1/catalog/items/1/nope")]
     [InlineData("/no/such/page")]
     [InlineData("/Catalog/Nope")]
@@ -46,9 +47,9 @@ public sealed class SpaFallbackTests(MockModeAppFactory factory) : IClassFixture
     [InlineData("/Catalog/Details/1")]
     [InlineData("/Catalog/Edit/1")]
     [InlineData("/Catalog/Delete/abc")]
-    public async Task PageRoutes_ReturnTheShellIfBuilt_AndStartNoSession(string path)
+    public async Task PageRoutes_ReturnTheShellIfBuilt_AndSetNoCookie(string path)
     {
-        // The shell is a static file (P2-8): only /api/v1/session starts the footer's session.
+        // The shell is a static file; the app has no session since the footer went (P3-7).
         using var client = factory.CreateRawClient();
 
         using var response = await client.GetAsync(path, Token);

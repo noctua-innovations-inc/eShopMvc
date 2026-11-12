@@ -25,22 +25,6 @@
     </section>
 
     @RenderBody()
-
-    <footer class="esh-app-footer">
-        <div class="container">
-            <article class="row">
-                <section class="col-sm-6">
-                    <img class="esh-app-footer-brand" src="~/images/brand_dark.png" />
-                </section>
-                <section class="col-sm-6">
-                    <img class="esh-app-footer-text hidden-xs" src="~/images/main_footer_text.png" width="335" height="26" alt="footer text image" />
-                    <br />
-                    @* Decision R-11: set by SessionStartFilter (legacy: Session_Start). *@
-                    <small>@Context.Session.GetString(SessionStartFilter.MachineNameKey), @Context.Session.GetString(SessionStartFilter.SessionStartTimeKey)</small>
-                </section>
-
-            </article>
-        </div>
-    </footer>
+    @* No footer since phase 3 (Decision P3-7). *@
 </body>
 </html>

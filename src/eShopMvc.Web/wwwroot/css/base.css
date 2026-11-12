@@ -11,7 +11,7 @@
 }
 
 html, body {
-    font-size: 16px;
+    font-size: 14px; /* Decision P3-8 (was 16px): everything sized in rem follows */
     font-family: Montserrat, sans-serif;
 }
 

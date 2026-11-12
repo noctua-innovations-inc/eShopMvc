@@ -5,11 +5,17 @@ import { Pager } from './Pager.tsx'
 
 const hidden = 'esh-pager-item--hidden'
 
-function renderPager(actualPage: number, totalPages: number, itemsPerPage = 10, totalItems = 12) {
+function renderPager(actualPage: number, totalPages: number, itemsPerPage = 10, totalItems = 12, rows = itemsPerPage) {
   render(
     <MemoryRouter>
       <Pager
-        page={{ ActualPage: actualPage, ItemsPerPage: itemsPerPage, TotalItems: totalItems, TotalPages: totalPages }}
+        page={{
+          ActualPage: actualPage,
+          ItemsPerPage: itemsPerPage,
+          TotalItems: totalItems,
+          TotalPages: totalPages,
+          Data: Array.from({ length: rows }),
+        }}
       />
     </MemoryRouter>,
   )
@@ -20,11 +26,16 @@ function renderPager(actualPage: number, totalPages: number, itemsPerPage = 10, 
 }
 
 describe('Pager', () => {
-  it('prints the Razor text: page size, total, one-based page and page count', () => {
-    renderPager(1, 2)
+  it('prints the rows on the page, the total, the one-based page and the page count', () => {
+    renderPager(0, 2)
 
-    // "Showing 10" on a last page of 2 rows is the preserved quirk (R-24).
-    expect(screen.getByText('Showing 10 of 12 products - Page 2 - 2')).toHaveClass('esh-pager-item')
+    expect(screen.getByText('Showing 10 of 12 products - Page 1 - 2')).toHaveClass('esh-pager-item')
+  })
+
+  it('prints the number of rows, not the page size, on a shorter last page (P3-9)', () => {
+    renderPager(1, 2, 10, 12, 2)
+
+    expect(screen.getByText('Showing 2 of 12 products - Page 2 - 2')).toBeInTheDocument()
   })
 
   it('hides Previous on the first page but still renders it', () => {
@@ -53,10 +64,10 @@ describe('Pager', () => {
   })
 
   it('hides both links when there are no items', () => {
-    const { previous, next } = renderPager(0, 0, 10, 0)
+    const { previous, next } = renderPager(0, 0, 10, 0, 0)
 
     expect(previous).toHaveClass(hidden)
     expect(next).toHaveClass(hidden)
-    expect(screen.getByText('Showing 10 of 0 products - Page 1 - 0')).toBeInTheDocument()
+    expect(screen.getByText('Showing 0 of 0 products - Page 1 - 0')).toBeInTheDocument()
   })
 })

@@ -55,8 +55,6 @@ export const listRoutes = {
   '/api/v1/catalog/types': { status: 200, body: types },
 }
 
-export const session ={ MachineName: 'TESTBOX', SessionStartTime: '10/29/2026 9:05:07 AM' }
-
 export function catalogItem(overrides: Partial<CatalogItem> = {}): CatalogItem {
   return {
     Id: 1,

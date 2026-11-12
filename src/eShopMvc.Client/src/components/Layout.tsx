@@ -1,8 +1,7 @@
 import { Link, Outlet } from 'react-router'
-import { Footer } from './Footer.tsx'
 
-// Decision P2-11: the markup and texts of the Razor _Layout.cshtml (header, banner, footer), with the
-// existing CSS linked from index.html.
+// Decision P2-11: the markup and texts of the Razor _Layout.cshtml (header, banner), with the
+// existing CSS linked from index.html. No footer since phase 3 (P3-7).
 export function Layout() {
   return (
     <>
@@ -23,8 +22,6 @@ export function Layout() {
       </section>
 
       <Outlet />
-
-      <Footer />
     </>
   )
 }

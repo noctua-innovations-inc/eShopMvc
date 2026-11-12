@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { BrowserRouter } from 'react-router'
 import { afterEach, describe, expect, it } from 'vitest'
 import App from './App.tsx'
-import { catalogItem, listRoutes, page, session, stubFetch } from './test/fakeApi.ts'
+import { catalogItem, listRoutes, page, stubFetch } from './test/fakeApi.ts'
 
 // Decision P2-19. With the BrowserRouter of main.tsx, because the header is the browser's own URL.
 describe('X-Client-Page', () => {
@@ -29,7 +29,6 @@ describe('X-Client-Page', () => {
       '/api/v1/catalog/items?pageSize=5&pageIndex=0': { status: 200, body: page({ Data: [catalogItem({ Id: 7 })] }) },
       '/api/v1/catalog/items': { status: 200, body: page() },
       '/api/v1/catalog/items/7':{ status: 200, body: catalogItem({ Id: 7 }) },
-      '/api/v1/session': { status: 200, body: session },
       'PUT /api/v1/catalog/items/7': { status: 204 },
       ...listRoutes,
     })
@@ -41,11 +40,10 @@ describe('X-Client-Page', () => {
     )
     await user.click(await screen.findByRole('link', { name: 'Edit' }))
     await user.click(await screen.findByRole('button', { name: '[ Save ]' }))
-    await screen.findByRole('table')
+    await screen.findByRole('grid')
 
     expect(pagesByUrl(fetchMock)).toEqual({
       'GET /api/v1/catalog/items?pageSize=5&pageIndex=0': '/Catalog/Index',
-      'GET /api/v1/session': '/Catalog/Index',
       'GET /api/v1/catalog/items/7': '/Catalog/Edit/7',
       'GET /api/v1/catalog/brands': '/Catalog/Edit/7',
       'GET /api/v1/catalog/types': '/Catalog/Edit/7',

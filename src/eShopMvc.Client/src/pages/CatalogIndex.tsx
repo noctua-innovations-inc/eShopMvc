@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { ApiError, getCatalogItems } from '../api.ts'
 import type { CatalogItem, PaginatedItems } from '../api.ts'
 import { CatalogTable } from '../components/CatalogTable.tsx'
 import { Pager } from '../components/Pager.tsx'
 import { useDocumentTitle } from '../hooks.ts'
+import { lastPageIfBeyond, pageUrl } from '../paging.ts'
 
 type State =
   | { status: 'loading' }
@@ -14,17 +15,35 @@ type State =
 // The Razor Catalog/Index.cshtml: "Create New", the table and the pager, for ?pageSize=…&pageIndex=….
 export function CatalogIndex() {
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const pageSize = searchParams.get('pageSize')
   const pageIndex = searchParams.get('pageIndex')
   const [state, setState] = useState<State>({ status: 'loading' })
 
   useDocumentTitle('Index')
 
+  // Decision P3-4: only the list page fills the window (site.css, "esh-fill"); the other pages keep
+  // their layout.
+  useEffect(() => {
+    document.body.classList.add('esh-fill')
+    return () => document.body.classList.remove('esh-fill')
+  }, [])
+
   // The previous page stays on screen until the next one has arrived.
   useEffect(() => {
     const controller = new AbortController()
     getCatalogItems(pageSize, pageIndex, controller.signal).then(
-      (page) => setState({ status: 'loaded', page }),
+      (page) => {
+        // Decision P3-9: a page index beyond the last page (typed into the URL, or the last page's
+        // only item deleted) shows the last page instead of an empty one. The URL is replaced, so
+        // Back does not return to the empty page, and this effect loads the last page.
+        const lastPage = lastPageIfBeyond(page)
+        if (lastPage !== null) {
+          void navigate(pageUrl(page.ItemsPerPage, lastPage), { replace: true })
+          return
+        }
+        setState({ status: 'loaded', page })
+      },
       (error: unknown) => {
         if (!controller.signal.aborted) {
           setState({ status: 'failed', message: failureMessage(error) })
@@ -32,7 +51,7 @@ export function CatalogIndex() {
       },
     )
     return () => controller.abort()
-  }, [pageSize, pageIndex])
+  }, [pageSize, pageIndex, navigate])
 
   return (
     <div className="esh-table">

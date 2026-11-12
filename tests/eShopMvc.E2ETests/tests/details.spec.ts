@@ -6,7 +6,7 @@ test.describe('Details page', () => {
     const item = (await getPage(request)).Data[0]
 
     await page.goto(app('/'))
-    await page.locator('tbody tr').first().getByRole('link', { name: 'Details' }).click()
+    await page.locator('.ag-row').first().getByRole('link', { name: 'Details' }).click()
 
     await expect(page).toHaveURL(appUrl(`/Catalog/Details/${item.Id}`))
     await expect(page.getByRole('heading', { level: 2 })).toHaveText('Details')
@@ -36,7 +36,7 @@ test.describe('Details page', () => {
     await page.goto(app(`/Catalog/Details/${item.Id}`))
     await page.getByRole('link', { name: 'Back to List' }).click()
     await expect(page).toHaveURL(appUrl())
-    await expect(page.locator('tbody tr').first()).toBeVisible()
+    await expect(page.locator('.ag-row').first()).toBeVisible()
 
     await page.goBack()
     await page.getByRole('link', { name: 'Edit' }).click()

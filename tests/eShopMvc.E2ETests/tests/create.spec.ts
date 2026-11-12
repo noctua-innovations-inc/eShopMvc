@@ -73,7 +73,7 @@ test.describe('Create page', () => {
     await field(page, 'Stock').fill('7')
     await create.click()
     await expect(page).toHaveURL(appUrl())
-    await expect(page.locator('tbody tr').first()).toBeVisible()
+    await expect(page.locator('.ag-row').first()).toBeVisible()
 
     const created = await findByName(request, newName)
     expect(created).toMatchObject({
@@ -85,9 +85,9 @@ test.describe('Create page', () => {
     })
 
     await page.goto(app('/?pageSize=1000'))
-    const row = page.locator('tbody tr', { hasText: newName })
-    await expect(row.locator('td.esh-table-price')).toHaveText('$12.34')
-    await expect(row.locator('td').nth(3)).toHaveText(brand!)
+    const row = page.locator('.ag-row', { hasText: newName })
+    await expect(row.locator('.esh-table-price')).toHaveText('$12.34')
+    await expect(row.locator('[role="gridcell"]').nth(3)).toHaveText(brand!)
   })
 
   test('Cancel returns to the list without creating anything', async ({ page, request, newName }) => {

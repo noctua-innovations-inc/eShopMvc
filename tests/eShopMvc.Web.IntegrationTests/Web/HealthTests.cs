@@ -9,7 +9,7 @@ public sealed class HealthTests(MockModeAppFactory factory) : IClassFixture<Mock
     [Theory]
     [InlineData("/health/live")]
     [InlineData("/health/ready")] // mock mode: no database check
-    public async Task Health_ReturnsHealthyWithoutDetailsOrSession(string path)
+    public async Task Health_ReturnsHealthyWithoutDetailsOrCookies(string path)
     {
         using var client = factory.CreateRawClient();
 

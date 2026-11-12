@@ -28,13 +28,13 @@ COPY --from=client /src/eShopMvc.Web/wwwroot/app ./wwwroot/app
 RUN dotnet publish eShopMvc.Web.csproj --configuration Release --no-restore --output /app
 
 # Decision D-A: full Ubuntu 24.04 image. It has ICU (en-US formatting, R-12; globalization is not
-# invariant), time zone data (TZ, D-E) and bash for the health check (D-B). No curl or wget needed.
+# invariant) and bash for the health check (D-B). No curl or wget needed.
 # No Node either: the client is static files by now.
 FROM mcr.microsoft.com/dotnet/aspnet:10.0.13-noble AS final
 WORKDIR /app
 COPY --from=build /app ./
 
-# Data Protection key ring (antiforgery tokens, session cookie). Created here owned by "app" so the
+# Data Protection key ring (antiforgery tokens). Created here owned by "app" so the
 # compose volume mounted on it starts out writable for the non-root user (Decision D-H).
 RUN mkdir -p /home/app/.aspnet/DataProtection-Keys \
     && chown -R $APP_UID /home/app/.aspnet

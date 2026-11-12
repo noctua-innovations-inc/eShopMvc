@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Localization;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddControllersWithViews(options => options.Filters.Add<SessionStartFilter>())
+builder.Services.AddControllersWithViews()
     // Decision R-7: PascalCase JSON, as Web API 2 (Newtonsoft) produced. No XML formatter.
     .AddJsonOptions(options => options.JsonSerializerOptions.PropertyNamingPolicy = null);
 builder.Services.AddCatalogServices(builder.Configuration);
@@ -14,10 +14,7 @@ builder.Services.AddCatalogServices(builder.Configuration);
 // Decision P2-7: the React client sends the antiforgery token in a header.
 builder.Services.AddAntiforgery(options => options.HeaderName = AntiforgeryCookieFilter.HeaderName);
 
-// Decision R-11: session for the footer (legacy InProc session + Session_Start, 20-minute idle timeout).
-builder.Services.AddDistributedMemoryCache();
-builder.Services.AddSession();
-builder.Services.AddSingleton(TimeProvider.System);
+// No session: it only held the footer's values (R-11, P2-8), and the footer is gone (Decision P3-7).
 
 // Decision L3: /health/live and /health/ready (AddCatalogServices adds the database check in database mode).
 builder.Services.AddHealthChecks();
@@ -57,8 +54,6 @@ app.UseRequestLocalization(new RequestLocalizationOptions
 });
 
 app.UseRouting();
-
-app.UseSession();
 
 app.UseAuthorization();
 

@@ -1,4 +1,4 @@
-// The JSON API of the ASP.NET Core app (Decisions P2-6 and P2-8). Property names are PascalCase (R-7).
+// The JSON API of the ASP.NET Core app (Decision P2-6). Property names are PascalCase (R-7).
 
 export interface CatalogBrand {
   Id: number
@@ -33,11 +33,6 @@ export interface PaginatedItems<T> {
   TotalItems: number
   TotalPages: number
   Data: T[]
-}
-
-export interface SessionInfo {
-  MachineName: string
-  SessionStartTime: string
 }
 
 /** The fields the forms send (P2-6: the server copies only these; `Id` only matters for PUT). */
@@ -172,9 +167,4 @@ function writeHeaders(): Record<string, string> {
     headers['X-XSRF-TOKEN'] = decodeURIComponent(cookie.slice('XSRF-TOKEN='.length))
   }
   return headers
-}
-
-/** The footer values; the first call starts the session (P2-8). */
-export function getSession(signal?: AbortSignal): Promise<SessionInfo> {
-  return getJson('/api/v1/session', signal)
 }

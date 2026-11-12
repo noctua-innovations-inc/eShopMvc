@@ -13,19 +13,19 @@ SQL Server; one Linux container. The only Razor view left is the error page.
 eShopMvc/
   legacy/eShopLegacyMVCSolution/   original app – READ-ONLY reference
   src/eShopMvc.Web/                new ASP.NET Core app (.NET 10): JSON API, pictures, serves the React UI; http://localhost:5070
-  src/eShopMvc.Client/             React client (Vite, TypeScript; phase 2): all pages; builds into src/eShopMvc.Web/wwwroot/app
+  src/eShopMvc.Client/             React client (Vite, TypeScript; phase 2): all pages; the list is an AG Grid Community grid (phase 3; never add ag-grid-enterprise); builds into src/eShopMvc.Web/wwwroot/app
   tests/eShopMvc.SmokeTests/       HTTP smoke tests, runnable against either app
   tests/eShopMvc.E2ETests/         browser tests of the React UI (Playwright, npm project; not in eShopMvc.slnx)
   tests/eShopMvc.Web.UnitTests/    unit tests for src/eShopMvc.Web (no running app, no database)
   tests/eShopMvc.Web.IntegrationTests/  database tests (own LocalDB test database; see D11)
   docs/                            assessment.md (phase 1 step 1), parity.md (legacy vs new app; "Phase 2": Razor UI vs React UI)
-  docs/agents/                     phase documents (phase-01-port.md, phase-02-react.md); see "Current phase"
+  docs/agents/                     phase documents (phase-01-port.md, phase-02-react.md, phase-03-grid.md); see "Current phase"
   eShopMvc.slnx                    the only solution: web app + test projects
   dotnet-tools.json                local tools (dotnet-ef 10.0.13, libman 3.0.114); `dotnet tool restore`
   global.json                      dotnet test runner = Microsoft.Testing.Platform
   run-legacy.ps1                   builds and runs the legacy app
   docker-compose.yml               new app + SQL Server 2022 on Linux (step 10), http://localhost:5080
-  .env.example                     template for .env (git-ignored): MSSQL_SA_PASSWORD, optional TZ
+  .env.example                     template for .env (git-ignored): MSSQL_SA_PASSWORD
   src/eShopMvc.Web/Dockerfile      multi-stage Linux image, builds the React client too (build context: src/)
   src/.dockerignore                for that build context
   AGENTS.md                        this file
@@ -117,14 +117,13 @@ startup is logged as Critical (server and database, never the password) and stop
 | `ClientValidationEnabled`, `UnobtrusiveJavaScriptEnabled` | ASP.NET Core defaults (on); no setting | none |
 | `webpages:Version`, `webpages:Enabled`, `httpRuntime targetFramework` | Not needed | none |
 | `<globalization culture="en-US">` | Code, `UseRequestLocalization` (R-12); deliberately not configurable | none |
-| `<sessionState mode="InProc">` | Code, `AddSession` (in-memory, 20 min) (R-11) | none |
+| `<sessionState mode="InProc">` | Not ported any more: the session only held the footer's values, and the footer is gone (P3-7; was R-11) | none |
 | `compilation debug` / Web.Release.config | Environment: Development = developer exception page; otherwise error page + HSTS | `ASPNETCORE_ENVIRONMENT` |
 | `log4Net.xml` | `Logging` section (levels, console formatter). Page views: the API's log lines carry `Page` (the React page that made the call, from the client's `X-Client-Page` header; P2-19) | `Logging__LogLevel__<Category>`, `Logging__Console__FormatterName` |
 | `ApplicationInsights.config` | Dropped (R-26) | none |
 | *(new)* `AllowedHosts` | `*` (template default); may be restricted for Azure | `AllowedHosts` |
 | *(new)* listening URL | launchSettings.json, port 5070 (Development only); container: 8080 (image default), published as host port 5080 | `ASPNETCORE_HTTP_PORTS` or `ASPNETCORE_URLS` |
 | *(new)* forwarded headers (R-10) | Off by default; on behind a proxy (D-D). **Trusts `X-Forwarded-*` from any sender**: enable only where the app is reachable solely through a proxy that sets them (e.g. Azure's front end), never where clients can reach it directly | `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` |
-| *(new)* footer time zone (R-11) | Container: UTC unless `TZ` is set (D-E) | `TZ` (e.g. `Europe/Berlin`; in compose via `.env`) |
 
 Override rules: `__` stands for `:`; environment variables override appsettings*.json, and
 command-line arguments (`--Catalog:UseMockData=true`) override both. Category names with dots
@@ -137,7 +136,12 @@ command-line arguments (`--Catalog:UseMockData=true`) override both. Category na
 - Phase 2 (complete, 2026-11-10): replace the Razor UI with React.
   See `docs/agents/phase-02-react.md`; results in `docs/parity.md`, "Phase 2".
 
+- Phase 3 (complete, 2026-11-11): scrollable grid for the catalog list (AG Grid Community); footer and
+  session removed, smaller sizes, paging corrections.
+  See `docs/agents/phase-03-grid.md`; results in `docs/parity.md`, "Phase 3".
+
 ## Current phase
-No phase is in progress. Before starting any task, read both phase documents for the decisions
-that apply (R-*, D*, L* in phase 1; P2-* in phase 2) and keep to them; a new phase gets its own
-document under `docs/agents/` and is named here.
+None in progress; the last one is phase 3 (`docs/agents/phase-03-grid.md`). Read it before starting any task, together with the
+other two phase documents for the decisions that still apply (R-*, D*, L* in phase 1; P2-* in
+phase 2; P3-* in phase 3), and keep to them; a new phase gets its own document under
+`docs/agents/` and is named here.

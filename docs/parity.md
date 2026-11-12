@@ -245,3 +245,66 @@ name accepted by the form (mock mode stores it; the database column has 50).
   re-compared (phase 1 established Razor = legacy there).
 - **The comparison scripts are not in the repository**; this section and P2-12 "Step 10" describe
   the method.
+
+## Phase 3: HTML table → AG Grid on the list page
+
+Phase 3 (`docs/agents/phase-03-grid.md`) replaced the list's `<table>` by an AG Grid (Community,
+MIT) that fills the window and scrolls on its own. Compared with the phase 2 UI (commit `c132c54`)
+by measurements and screenshots of the list at 1920×1080, 1280×800 and 1000×700 (one-off Playwright
+scripts, not committed). Steps 5 to 7 (requested after a look at the grid) then removed the footer
+with its session, made everything smaller and corrected the pager. The URLs and the catalog API are
+unchanged; `GET /api/v1/session` is gone.
+
+### Test results (2026-11-11, after step 7)
+
+| Suite | Result |
+|---|---|
+| Client build, lint | clean; script 1,013 kB (295 kB gzip), was 274 kB (86 kB gzip) |
+| Vitest | 94/94 |
+| C# unit tests | 163/163 |
+| C# integration tests (LocalDB) | 99/99 |
+| Smoke vs new (port 5070, database mode) | 36 passed, 29 skipped (legacy-only) of 65 |
+| Browser (port 5070) | 35/35 |
+| Smoke vs container (port 5080, image rebuilt) | 36 passed, 29 skipped (legacy-only) of 65 |
+| Browser vs container (port 5080) | 35/35 |
+| `dotnet build` | 0 warnings, 0 errors |
+
+Not rerun: the smoke tests against legacy (nothing they cover changed).
+
+### Deliberate differences (grid vs table)
+
+| ID | Difference | Why | Test |
+|---|---|---|---|
+| P3-4 | The list page is as tall as the window: header, banner, "Create New" and pager stay in place, the grid takes the rest and scrolls its rows under a fixed header row. If that leaves the grid less than 300px (windows lower than about 562px since P3-8), the grid is 300px and the page scrolls as before | The request of phase 3 | Browser `list.spec.ts` "in a window with room for the grid", "in a low window…"; Vitest `App.test.tsx` "fills the window on the list page only" |
+| P3-5 | Rows, cells and headers are `div`s with the roles `grid`, `row`, `gridcell`, `columnheader`; there is no `<table>` | AG Grid's markup | Vitest `App.test.tsx`; Browser `list.spec.ts` |
+| P3-5 | Text in a cell **wraps** and the row grows (the table never wrapped and grew wider than the page instead: 1466px in a 1440px column) | Columns have a width now; nothing is cut off | Looked at, not tested |
+| P3-5 | Columns can be **resized** by dragging the header's edge; widths are close to the table's, name and description share the rest; too narrow a window scrolls the grid sideways, not the page | Free with the grid | Looked at, not tested |
+| P3-5 | **Keyboard:** Tab stops once on the links' cell of a row before its three links (the table: the links only); the arrow keys move between cells once one has the focus | AG Grid's documented pattern for links in cells; its default never reaches the links | Browser `list.spec.ts` "reaches the links of the rows with the Tab key…" |
+| P3-5 | AG Grid adds its theme as `<style>` elements to the page | Its theming API | Browser `shell.spec.ts` (linked style sheets only) |
+| P3-2 | The script is 3.7 times larger (see the table above) | The grid; only the modules in use are registered | Measured at build |
+| P3-7 | **No footer** on any page (React pages and the Razor error page). With it went the session: `GET /api/v1/session` (now 404), the `.AspNetCore.Session` cookie, the `TZ` setting and the container's host name. Supersedes R-11, P2-8 and D-E | "The footer has no value" (2026-11-11); the session only held the footer's two values | Browser `shell.spec.ts` "Footer: is gone from every page…"; Vitest `App.test.tsx` "has no footer…"; integration `SpaFallbackTests` (`/api/v1/session` is 404, pages set no cookie) |
+| P3-8 | **Smaller sizes on all pages:** base font 14px (16px); list thumbnails 84px wide (120px, −30%); grid cell padding 6px top and bottom (12px); buttons' padding 7px/14px (16px/24px) and gap above 7px (16px); banner 72px high with a 28px title (12.5% and 4% of the window's width: 240px and 77px at 1920). Everything sized in `rem` follows the base font. One scale for text: banner title 28px, page titles (Create, Edit, Details, Delete) 21px (48px) with half the padding, the Delete question 17.5px (28px), the "Edit \| Back to List" links 14px (32px), everything else 14px | "Everything is too large" (2026-11-11) | Browser `list.spec.ts` "uses the smaller sizes of P3-8", `shell.spec.ts` "Font sizes (P3-8)" |
+| P3-9 | **A page index beyond the last page shows the last page** and the URL is corrected (replaced, so Back skips the empty page); an empty catalog shows its first page. Before: an empty grid with "Page 4 - 2". Costs a second API call in that case; the API is unchanged and still answers such an index with an empty page | Confusing (reported 2026-11-11) | Vitest `paging.test.ts`, `App.test.tsx` "shows the last page…", "shows the first page of an empty catalog…"; Browser `list.spec.ts` "shows the last page for a page index beyond it…" |
+| P3-9 | **The pager counts the rows on the page:** "Showing 2 of 12 products - Page 2 - 2" (Razor UI and phase 2: "Showing 10 of 12…", the page size). Supersedes this part of R-24 | Confusing (reported 2026-11-11) | Vitest `Pager.test.tsx`; Browser `list.spec.ts` "hides Next on the last page" |
+
+### Known harmless differences
+
+- Rows are 68px high since P3-8 (step 3: 104px; table: 103px); the header row is 48px (table: 48px).
+  Measured: eleven full rows at 1920×1080 (step 3: four), seven at 1280×800, five at 1280×720; the
+  page scrolls at none of them.
+- The images `brand_dark.png` and `main_footer_text.png` are still in `wwwroot/images` (and in
+  `StaticAssetTests`); nothing shows them since P3-7.
+- An empty catalog's pager still reads "Page 1 - 0", as in the Razor UI.
+- The price keeps the table's weight (300): there `.esh-table td` won over `.esh-table-price`.
+- Between two pages of the list the rows change without animation, as in the table.
+
+### Test gaps (deliberate)
+
+- **Hover and focus styles** of the grid were not compared with the table's.
+- **The smaller sizes on the Create, Details and Delete pages** were not looked at one by one (Edit
+  and Details were, in screenshots); their browser tests pass.
+- **An empty catalog** in a browser: the grid's "No Rows To Show" was not looked at (Vitest covers the pager).
+- **Screen readers** were not tried; the grid has AG Grid's ARIA roles and its rows are in reading order.
+- **The Vite dev server** (port 5173) stopped answering after the first page load while this was
+  built (`ECONNRESET` from its proxy for `/lib/bootstrap/…`); the app on port 5070 was healthy. Not
+  investigated; all checks ran against the built client on port 5070.

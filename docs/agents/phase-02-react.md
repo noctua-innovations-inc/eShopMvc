@@ -1,6 +1,6 @@
 # Phase 2: replace the Razor UI with React
 
-> **Current phase.** Read this file before starting any task. The project-wide rules in `AGENTS.md`
+> **Complete (2026-11-10); the current phase is named in `AGENTS.md`.** Read this file before starting any task. The project-wide rules in `AGENTS.md`
 > still apply; this file adds the goal, decisions and steps of phase 2. Phase 1 decisions
 > (R-*, D*, L*, D-*) are in `docs/agents/phase-01-port.md` and stay in force unless a P2 decision
 > below changes one of them.
