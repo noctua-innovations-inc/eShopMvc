@@ -111,17 +111,14 @@ amended in writing.
 ## Three phases
 
 ```mermaid
-timeline
-    title From .NET Framework 4.8 to React on .NET 10
-    section Phase 1: port
-        Oct 13 : Baseline commit of the legacy app, agent rules written
-        Oct 14 : Assessment of the legacy code, first decisions
-        Oct 15-18 : Models, EF Core, controllers, views, config, logging, health checks, Linux container
-    section Phase 2: React
-        Oct 28 : JSON API with antiforgery header token
-        Nov 10 : React shell, list, details, delete, create, edit, Playwright tests, cutover, parity
-    section Phase 3: grid
-        Nov 11 : AG Grid list that fills the window, footer and session removed, one type scale, paging fixes
+flowchart LR
+    S["Oct 13<br/>Baseline: legacy app<br/>committed untouched,<br/>agent rules written"]
+    P1["Phase 1: Port<br/>Oct 14-18<br/>Assessment, then ten steps:<br/>models, EF Core, controllers,<br/>views, config, logging,<br/>health checks, Linux container"]
+    P2["Phase 2: React<br/>Oct 28 - Nov 10<br/>JSON API, then React pages<br/>one by one, Playwright tests,<br/>cutover, parity check"]
+    P3["Phase 3: Grid<br/>Nov 11<br/>AG Grid list that fills the window,<br/>footer and session removed,<br/>one type scale, paging fixes"]
+    E["Today<br/>.NET 10 + React<br/>in one Linux container"]
+
+    S --> P1 --> P2 --> P3 --> E
 ```
 
 1. **Port** the app to ASP.NET Core MVC on .NET 10 with identical pages, routes and behaviour, in ten verified steps.
